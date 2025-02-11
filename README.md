@@ -1,8 +1,7 @@
 
 # OpenDOG
 
-Low cost  Quadruped Robot with SDK and Mujoco simulations, fully opensource
-
+Low cost quadruped robot with SDK and Mujoco simulations, trained with Reinforcement Learning and fully opensource
 
 ![Logo](https://i.imgur.com/9Hkmdg1.png)
 
@@ -19,6 +18,6 @@ Low cost  Quadruped Robot with SDK and Mujoco simulations, fully opensource
 ## Authors
 
 - Ryan Nathanael Cruz Barragan [@ryancruzb](https://www.github.com/ryancruzb)
-- Ruiz Alamilla Mauricio Emiliano
+- Mauricio Emiliano Ruiz Alamilla
 
 
