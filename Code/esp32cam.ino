@@ -7,6 +7,10 @@
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
 #include "esp_http_server.h"
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
+#include <Wire.h> // Using standard Wire.h
+#include <ArduinoJson.h> // For creating JSON responses
 
 // Define the MIN macro
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -48,6 +52,16 @@ static const char* _STREAM_PART = "Content-Type: image/jpeg\r\nContent-Length: %
 httpd_handle_t stream_httpd = NULL;
 framesize_t current_framesize = FRAMESIZE_VGA;
 bool frame_size_changed = false;
+
+// --- IMU Setup ---
+#define I2C_SDA 14 // SDA Connected to GPIO 14
+#define I2C_SCL 15 // SCL Connected to GPIO 15
+Adafruit_MPU6050 mpu;
+
+// --- JSON Buffer for IMU Data ---
+StaticJsonDocument<200> imu_doc;
+char imu_json_buffer[200];
+
 
 static esp_err_t stream_handler(httpd_req_t *req){
   camera_fb_t * fb = NULL;
@@ -159,6 +173,27 @@ static esp_err_t cmd_handler(httpd_req_t *req){
   return ESP_OK;
 }
 
+static esp_err_t imu_data_handler(httpd_req_t *req){
+  sensors_event_t a, g, temp;
+  mpu.getEvent(&a, &g, &temp);
+
+  imu_doc.clear(); // Clear previous data
+  imu_doc["accel_x"] = a.acceleration.x;
+  imu_doc["accel_y"] = a.acceleration.y;
+  imu_doc["accel_z"] = a.acceleration.z;
+  imu_doc["gyro_x"] = g.gyro.x;
+  imu_doc["gyro_y"] = g.gyro.y;
+  imu_doc["gyro_z"] = g.gyro.z;
+  imu_doc["temp"] = temp.temperature;
+
+  serializeJson(imu_doc, imu_json_buffer);
+
+  httpd_resp_set_type(req, "application/json");
+  httpd_resp_send(req, imu_json_buffer, strlen(imu_json_buffer));
+  return ESP_OK;
+}
+
+
 void startCameraServer(){
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.server_port = 81;
@@ -177,9 +212,18 @@ void startCameraServer(){
     .user_ctx  = NULL
   };
 
+  httpd_uri_t imu_data_uri = {
+    .uri       = "/imu_data",
+    .method    = HTTP_GET,
+    .handler   = imu_data_handler,
+    .user_ctx  = NULL
+  };
+
+
   if (httpd_start(&stream_httpd, &config) == ESP_OK) {
     httpd_register_uri_handler(stream_httpd, &stream_uri);
     httpd_register_uri_handler(stream_httpd, &cmd_uri);
+    httpd_register_uri_handler(stream_httpd, &imu_data_uri); // Register IMU data handler
   }
 }
 
@@ -188,6 +232,19 @@ void setup() {
 
   Serial.begin(115200);
   Serial.setDebugOutput(false);
+
+  // --- IMU Initialization ---
+  Wire.begin(I2C_SDA, I2C_SCL, 100000); // Remap default Wire pins
+  while (!mpu.begin(0x68, &Wire)) { // Use custom Wire instance, and address 0x68
+    Serial.println("Failed to find MPU6050 chip, waiting...");
+    delay(1000);
+  }
+  Serial.println("MPU6050 Found!");
+  mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
+  mpu.setGyroRange(MPU6050_RANGE_500_DEG);
+  mpu.setFilterBandwidth(MPU6050_BAND_5_HZ);
+  // --- End IMU Initialization ---
+
 
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
@@ -238,10 +295,14 @@ void setup() {
   Serial.print("Camera Stream Ready! Go to: http://");
   Serial.print(WiFi.localIP());
   Serial.println(":81/stream");
+  Serial.print("IMU Data Ready! Go to: http://");
+  Serial.print(WiFi.localIP());
+  Serial.println(":81/imu_data");
+
 
   startCameraServer();
 }
 
 void loop() {
-  delay(1);
+  delay(1); // Keep loop minimal for HTTP server responsiveness
 }

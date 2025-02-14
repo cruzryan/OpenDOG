@@ -3,12 +3,14 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 import time
+import json # Import json module
 
 class QuadPilotCamera:
     def __init__(self, ip):
         self.ip = ip
         self.stream_url = f"http://{ip}:81/stream"
         self.control_url = f"http://{ip}:81/control"
+        self.imu_data_url = f"http://{ip}:81/imu_data" # New IMU data URL
         self.current_stream_thread = None
         self.streaming = False
 
@@ -25,6 +27,7 @@ class QuadPilotCamera:
         """
         Internal generator to fetch frames from the stream.
         """
+        response = None # Initialize response outside try block for finally clause scope
         try:
             response = requests.get(self.stream_url, stream=True, timeout=10)
             response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
@@ -50,6 +53,7 @@ class QuadPilotCamera:
             self.streaming = False # Ensure streaming flag is reset when stream ends
             if response:
                 response.close() # Close response to release resources
+
 
     def stream(self, framesize="VGA"):
         """
@@ -84,3 +88,16 @@ class QuadPilotCamera:
                 print(f"Failed to change framesize. Status code: {response.status_code}")
         except requests.exceptions.RequestException as e:
             print(f"Error changing framesize: {e}")
+
+    def get_imu_data(self):
+        """
+        Fetches IMU data from the ESP32.
+        Returns a dictionary containing IMU data, or None on error.
+        """
+        try:
+            response = requests.get(self.imu_data_url, timeout=10)
+            response.raise_for_status() # Raise HTTPError for bad responses
+            return response.json() # Parse JSON response
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching IMU data: {e}")
+            return None
