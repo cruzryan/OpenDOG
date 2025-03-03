@@ -221,7 +221,7 @@ static esp_err_t events_handler(httpd_req_t *req) {
         if (httpd_resp_send_chunk(req, event, strlen(event)) != ESP_OK) {
             break; // Exit if client disconnects
         }
-        delay(10); // Send updates every 10 ms
+        delay(2); // Send updates every 2 ms
     }
     return ESP_OK;
 }
