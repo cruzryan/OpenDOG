@@ -24,10 +24,14 @@ body.set_pins(ENCODER_A=8, ENCODER_B=18, IN1=12, IN2=11)
 
 while True:
     # Get current angle
+    start = time.time()
     angle = body.get_angle()
-    print(f"Current angle: {angle}°")
+    print(f"Encoder position: {angle}")
+    end = time.time()
+    # Print time in milliseconds
+    print(f"Time: {(end - start) * 1000:.2f} ms")
+    # time.sleep(0.5)
+    # body.set_angle(45)
+    # time.sleep(0.5)
+    # body.set_angle(-45)
 
-    # Get encoder position
-    pos = body.get_encoderPos()
-    print(f"Encoder position: {pos}")
-    # time.sleep(1)

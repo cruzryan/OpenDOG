@@ -34,9 +34,6 @@ float integralError = 0;
 unsigned long lastTime = 0;
 const unsigned long dt = 2;
 
-// Logging
-unsigned long lastLogTime = 0;
-const unsigned long LOG_INTERVAL = 100;
 
 // Control status
 bool control_enabled = true;
@@ -100,23 +97,7 @@ int computePower(long error, long errorDelta) {
     return constrain(power, -MAX_POWER, MAX_POWER);
 }
 
-// **Logging Function**
-void logData(long error, int power) {
-    if (millis() - lastLogTime >= LOG_INTERVAL) {
-        Serial.print(millis());
-        Serial.print(",");
-        Serial.print(encoderPos);
-        Serial.print(",");
-        Serial.print(targetPos);
-        Serial.print(",");
-        Serial.print(error);
-        Serial.print(",");
-        Serial.print(power);
-        Serial.print(",");
-        Serial.println(power == 0 ? 0 : (power > 0 ? 1 : -1));
-        lastLogTime = millis();
-    }
-}
+
 
 // **HTTP URI Handlers**
 static esp_err_t set_control_params_handler(httpd_req_t *req) {
@@ -229,8 +210,6 @@ static esp_err_t set_control_status_handler(httpd_req_t *req) {
 
 // **Setup Function**
 void setup() {
-    Serial.begin(115200);
-    Serial.println("Time,pos,target,error,power,dir");
 
     // Initialize pins
     pinMode(ENCODER_A, INPUT_PULLUP);
@@ -264,6 +243,8 @@ void setup() {
     // Start HTTP server
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = PORT;
+    config.stack_size = 8192; // Increase from default 4096
+
     if (httpd_start(&server, &config) == ESP_OK) {
         httpd_uri_t set_control_params_uri = {
             .uri       = "/set_control_params",
@@ -332,7 +313,6 @@ void loop() {
             power = computePower(error, errorDelta);
         }
         setMotor(power);
-        logData(error, power);
         lastTime = millis();
     }
 }
