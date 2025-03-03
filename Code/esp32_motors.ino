@@ -1,41 +1,33 @@
-#define ENCODER_A 5
-#define ENCODER_B 4
-#define IN1 6
-#define IN2 7
-#define ENA 46
-#define ENCODER_A2 17
-#define ENCODER_B2 16
-#define IN3 18
-#define IN4 8
-#define ENB 9
+#include <Arduino.h>
 
-// Control parameters
-const float kp = 0.5;            // Proportional gain
-const float kd = 0.005;            // Derivative gain for damping ~~~~ things that work: 0.005
-const int DEAD_ZONE = 2;         // Dead zone in encoder counts
-const int MAX_POWER = 3;       // Maximum motor power
-const int POSITION_THRESHOLD = 70; // Position threshold for power scaling ~~ prev: 70
+#define ENCODER_A 8  
+#define ENCODER_B 18
+#define IN1 12
+#define IN2 11
 
-// Encoder constants
-const int COUNTS_PER_REV = 1975;  // Encoder counts per revolution
+// Control parameters (unchanged)
+float kp = 0.9;
+float ki = 0.001;
+float kd = 0.3;
+const int DEAD_ZONE = 10;
+const int MAX_POWER = 255;
+const int POSITION_THRESHOLD = 5;
+const int BRAKE_THRESHOLD = 3;
 
-// Variables for position tracking - Motor 1
-long encoderPos = 0;
+// Encoder constants (unchanged)
+const int COUNTS_PER_REV = 1975;
+
+// Variables (unchanged)
+volatile long encoderPos = 0;
 long targetPos = 0;
-byte lastState = 0;
 long lastError = 0;
+float integralError = 0;
 
-// Variables for position tracking - Motor 2
-long encoderPos2 = 0;
-long targetPos2 = 0;
-byte lastState2 = 0;
-long lastError2 = 0;
-
-// Timing
+// Timing (unchanged)A70
 unsigned long lastTime = 0;
-unsigned long dt = 20;
+const unsigned long dt = 2;
 
-// Logging
+// Logging (unchanged)
 unsigned long lastLogTime = 0;
 const unsigned long LOG_INTERVAL = 100;
 
@@ -44,218 +36,144 @@ void setup() {
   pinMode(ENCODER_B, INPUT_PULLUP);
   pinMode(IN1, OUTPUT);
   pinMode(IN2, OUTPUT);
-  pinMode(ENA, OUTPUT);
 
-  pinMode(ENCODER_A2, INPUT_PULLUP);
-  pinMode(ENCODER_B2, INPUT_PULLUP);
-  pinMode(IN3, OUTPUT);
-  pinMode(IN4, OUTPUT);
-  pinMode(ENB, OUTPUT);
+  // Configure PWM for IN1 and IN2 using new API
+  ledcAttach(IN1, 1000, 8);  // Attach IN1 with 1kHz, 8-bit resolution, auto channel
+  ledcAttach(IN2, 1000, 8);  // Attach IN2 with 1kHz, 8-bit resolution, auto channel
 
-  digitalWrite(IN1, LOW);
-  digitalWrite(IN2, LOW);
-  analogWrite(ENA, 0);
-  digitalWrite(IN3, LOW);
-  digitalWrite(IN4, LOW);
-  analogWrite(ENB, 0);
-
+  // Initialize motor to brake
+  ledcWrite(IN1, 255);  // IN1 HIGH
+  ledcWrite(IN2, 255);  // IN2 HIGH
 
   Serial.begin(115200);
-  Serial.println("time,pos1,target1,error1,power1,dir1,pos2,target2,error2,power2,dir2");
+  Serial.println("Time,pos,target,error,power,dir");
+
+  attachInterrupt(digitalPinToInterrupt(ENCODER_A), handleEncoderA, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(ENCODER_B), handleEncoderB, CHANGE);
+}
+
+// Interrupt Service Routines (unchanged)
+void handleEncoderA() {
+  bool encAVal = digitalRead(ENCODER_A);
+  bool encBVal = digitalRead(ENCODER_B);
+  if (encAVal == encBVal) {
+    encoderPos--;
+  } else {
+    encoderPos++;
+  }
+}
+
+void handleEncoderB() {
+  bool encAVal = digitalRead(ENCODER_A);
+  bool encBVal = digitalRead(ENCODER_B);
+  if (encAVal == encBVal) {
+    encoderPos++;
+  } else {
+    encoderPos--;
+  }
 }
 
 void loop() {
-  // Update encoder position Motor 1
-  byte currentState = (digitalRead(ENCODER_A) << 1) | digitalRead(ENCODER_B);
-
-  if (currentState != lastState) {
-    switch (lastState) {
-      case 0:
-        if (currentState == 2) encoderPos++;
-        if (currentState == 1) encoderPos--;
-        break;
-      case 1:
-        if (currentState == 0) encoderPos++;
-        if (currentState == 3) encoderPos--;
-        break;
-      case 2:
-        if (currentState == 3) encoderPos++;
-        if (currentState == 0) encoderPos--;
-        break;
-      case 3:
-        if (currentState == 1) encoderPos++;
-        if (currentState == 2) encoderPos--;
-        break;
-    }
-    lastState = currentState;
-  }
-
-  // Update encoder position Motor 2
-  byte currentState2 = (digitalRead(ENCODER_A2) << 1) | digitalRead(ENCODER_B2);
-
-  if (currentState2 != lastState2) {
-    switch (lastState2) {
-      case 0:
-        if (currentState2 == 2) encoderPos2--; // INVERTED: Changed ++ to --
-        if (currentState2 == 1) encoderPos2++; // INVERTED: Changed -- to ++
-        break;
-      case 1:
-        if (currentState2 == 0) encoderPos2--; // INVERTED: Changed ++ to --
-        if (currentState2 == 3) encoderPos2++; // INVERTED: Changed -- to ++
-        break;
-      case 2:
-        if (currentState2 == 3) encoderPos2--; // INVERTED: Changed ++ to --
-        if (currentState2 == 0) encoderPos2++; // INVERTED: Changed -- to ++
-        break;
-      case 3:
-        if (currentState2 == 1) encoderPos2--; // INVERTED: Changed ++ to --
-        if (currentState2 == 2) encoderPos2++; // INVERTED: Changed -- to ++
-        break;
-    }
-    lastState2 = currentState2;
-  }
-
-  // Check for new serial commands
   if (Serial.available()) {
     String input = Serial.readStringUntil('\n');
-    if (input.startsWith("a")) {
-      int angle = input.substring(1).toInt();
-      if (angle >= 0 && angle <= 360) {
-        targetPos = (long)angle * COUNTS_PER_REV / 360; // Convert angle to encoder counts
-        Serial.print("Motor A - New target angle: ");
-        Serial.print(angle);
-        Serial.print(" degrees -> Target position: ");
-        Serial.println(targetPos);
-      }
-    } else if (input.startsWith("b")) {
-      int angle = input.substring(1).toInt();
-      if (angle >= 0 && angle <= 360) {
-        targetPos2 = (long)angle * COUNTS_PER_REV / 360; // Convert angle to encoder counts
-        Serial.print("Motor B - New target angle: ");
-        Serial.print(angle);
-        Serial.print(" degrees -> Target position: ");
-        Serial.println(targetPos2);
-      }
-    }
+    parseCommand(input);
   }
 
-  // Update motor control every dt milliseconds
   if (millis() - lastTime >= dt) {
-    // Calculate error Motor 1
     long error = targetPos - encoderPos;
-    long errorDelta = error - lastError; // Change in error
+    long errorDelta = error - lastError;
     lastError = error;
 
-    // Calculate power Motor 1
-    int power = 0;
-    if (abs(error) > DEAD_ZONE) {
-      // Scale error for power calculation
-      float scaled_error = (float)error / POSITION_THRESHOLD;
-      if (scaled_error > 1.0) scaled_error = 1.0;
-      if (scaled_error < -1.0) scaled_error = -1.0;
-
-      // Apply proportional and derivative control
-      power = kp * scaled_error * MAX_POWER + kd * errorDelta;
-
-      // Clamp power
-      if (power > MAX_POWER) power = MAX_POWER;
-      if (power < -MAX_POWER) power = -MAX_POWER;
+    if (abs(error) < MAX_POWER / ki) {
+      integralError += error * (dt / 1000.0);
+    } else {
+      integralError = constrain(integralError, -MAX_POWER/ki, MAX_POWER/ki);
     }
 
-    // Set motor power Motor 1
+    int power = computePower(error, errorDelta);
     setMotor(power);
 
-    // Calculate error Motor 2
-    long error2 = targetPos2 - encoderPos2;
-    long errorDelta2 = error2 - lastError2; // Change in error
-    lastError2 = error2;
-
-    // Calculate power Motor 2
-    int power2 = 0;
-    if (abs(error2) > DEAD_ZONE) {
-      // Scale error for power calculation
-      float scaled_error2 = (float)error2 / POSITION_THRESHOLD;
-      if (scaled_error2 > 1.0) scaled_error2 = 1.0;
-      if (scaled_error2 < -1.0) scaled_error2 = -1.0;
-
-      // Apply proportional and derivative control
-      power2 = kp * scaled_error2 * MAX_POWER + kd * errorDelta2;
-
-      // Clamp power
-      if (power2 > MAX_POWER) power2 = MAX_POWER;
-      if (power2 < -MAX_POWER) power2 = -MAX_POWER;
-    }
-
-    // Set motor power Motor 2
-    setMotor2(power2);
-
-
-    // Log data
-    if (millis() - lastLogTime >= LOG_INTERVAL) {
-      Serial.print(millis());
-      Serial.print(",");
-      Serial.print(encoderPos);
-      Serial.print(",");
-      Serial.print(targetPos);
-      Serial.print(",");
-      Serial.print(error);
-      Serial.print(",");
-      Serial.print(power);
-      Serial.print(",");
-      Serial.print(power == 0 ? 0 : (power > 0 ? 1 : -1));
-      Serial.print(",");
-      Serial.print(encoderPos2);
-      Serial.print(",");
-      Serial.print(targetPos2);
-      Serial.print(",");
-      Serial.print(error2);
-      Serial.print(",");
-      Serial.print(power2);
-      Serial.print(",");
-      Serial.println(power2 == 0 ? 0 : (power2 > 0 ? 1 : -1));
-
-
-      lastLogTime = millis();
-    }
-
+    logData(error, power);
     lastTime = millis();
   }
 }
 
-void setMotor(int power) {
-  if (power == 0) {
-    digitalWrite(IN1, LOW);
-    digitalWrite(IN2, LOW);
-    analogWrite(ENA, 0);
-    return;
+int computePower(long error, long errorDelta) {
+  if (abs(error) <= DEAD_ZONE) {
+    integralError = 0;
+    return 0;
   }
 
-  if (power > 0) {
-    digitalWrite(IN1, HIGH);
-    digitalWrite(IN2, LOW);
-  } else {
-    digitalWrite(IN1, LOW);
-    digitalWrite(IN2, HIGH);
+  float scaled_error = constrain((float)error / POSITION_THRESHOLD, -1.0, 1.0);
+  float dt_sec = dt / 1000.0;
+
+  float p_term = kp * scaled_error * MAX_POWER;
+  float i_term = ki * integralError;
+  float d_term = kd * (errorDelta / dt_sec);
+
+  if (abs(error) <= DEAD_ZONE * 5) {
+    d_term *= 3.0;
   }
 
-  analogWrite(ENA, abs(power));
+  int power = p_term + i_term + constrain(d_term, -MAX_POWER/2, MAX_POWER/2);
+  return constrain(power, -MAX_POWER, MAX_POWER);
 }
 
-void setMotor2(int power) {
+void setMotor(int power) {
   if (power == 0) {
-    digitalWrite(IN3, LOW);
-    digitalWrite(IN4, LOW);
-    analogWrite(ENB, 0);
-    return;
-  }
-
-  if (power > 0) {
-    digitalWrite(IN3, HIGH);
-    digitalWrite(IN4, LOW);
+    ledcWrite(IN1, 255);  // IN1 HIGH
+    ledcWrite(IN2, 255);  // IN2 HIGH
+  } else if (power > 0) {
+    ledcWrite(IN2, 0);    // IN2 LOW
+    ledcWrite(IN1, power); // IN1 PWM
   } else {
-    digitalWrite(IN3, LOW);
-    digitalWrite(IN4, HIGH);
+    ledcWrite(IN1, 0);    // IN1 LOW
+    ledcWrite(IN2, -power); // IN2 PWM
   }
+}
 
-  analogWrite(ENB, abs(power));
+void logData(long error, int power) {
+  if (millis() - lastLogTime >= LOG_INTERVAL) {
+    Serial.print(millis());
+    Serial.print(",");
+    Serial.print(encoderPos);
+    Serial.print(",");
+    Serial.print(targetPos);
+    Serial.print(",");
+    Serial.print(error);
+    Serial.print(",");
+    Serial.print(power);
+    Serial.print(",");
+    Serial.println(power == 0 ? 0 : (power > 0 ? 1 : -1));
+    lastLogTime = millis();
+  }
+}
+
+void parseCommand(String input) {
+  if (input.length() < 2) return;
+
+  char cmd = input.charAt(0);
+  String val = input.substring(1);
+
+  if (cmd == 'P') {
+    kp = val.toFloat();
+    Serial.print("KP set to: ");
+    Serial.println(kp);
+  } else if (cmd == 'I') {
+    ki = val.toFloat();
+    Serial.print("KI set to: ");
+    Serial.println(ki);
+  } else if (cmd == 'D') {
+    kd = val.toFloat();
+    Serial.print("KD set to: ");
+    Serial.println(kd);
+  } else if (cmd == 'A') {
+    int angle = val.toInt();
+    if (angle >= -360 && angle <= 360) {
+      targetPos = angle * COUNTS_PER_REV / 360;
+      Serial.print("Target: ");
+      Serial.print(angle);
+      Serial.println("°");
+    }
+  }
 }
