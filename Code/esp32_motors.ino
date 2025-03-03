@@ -34,6 +34,9 @@ float integralError = 0;
 unsigned long lastTime = 0;
 const unsigned long dt = 2;
 
+// Logging
+unsigned long lastLogTime = 0;
+const unsigned long LOG_INTERVAL = 100;
 
 // Control status
 bool control_enabled = true;
@@ -96,8 +99,6 @@ int computePower(long error, long errorDelta) {
     int power = p_term + i_term + constrain(d_term, -MAX_POWER/2, MAX_POWER/2);
     return constrain(power, -MAX_POWER, MAX_POWER);
 }
-
-
 
 // **HTTP URI Handlers**
 static esp_err_t set_control_params_handler(httpd_req_t *req) {
@@ -208,8 +209,26 @@ static esp_err_t set_control_status_handler(httpd_req_t *req) {
     return httpd_resp_send(req, "OK", 2);
 }
 
+static esp_err_t events_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "text/event-stream");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+    httpd_resp_set_hdr(req, "Connection", "keep-alive");
+
+    while (true) {
+        float angle = (float)encoderPos * 360 / COUNTS_PER_REV;
+        char event[64];
+        snprintf(event, sizeof(event), "data: %f\n\n", angle);
+        if (httpd_resp_send_chunk(req, event, strlen(event)) != ESP_OK) {
+            break; // Exit if client disconnects
+        }
+        delay(10); // Send updates every 10 ms
+    }
+    return ESP_OK;
+}
+
 // **Setup Function**
 void setup() {
+    Serial.begin(115200);
 
     // Initialize pins
     pinMode(ENCODER_A, INPUT_PULLUP);
@@ -240,11 +259,14 @@ void setup() {
     Serial.print("IP address: ");
     Serial.println(WiFi.localIP());
 
-    // Start HTTP server
+    // Start HTTP server with optimized configuration
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = PORT;
-    config.stack_size = 8192; // Increase from default 4096
-
+    config.core_id = 0;              // Pin HTTP server to Core 0
+    config.keep_alive_enable = true; // Enable keep-alive for persistent connections
+    config.keep_alive_idle = 5;      // Max idle time before closing connection (seconds)
+    config.keep_alive_interval = 3;  // Time between keep-alive probes (seconds)
+    config.keep_alive_count = 3;     // Number of probes before closing
     if (httpd_start(&server, &config) == ESP_OK) {
         httpd_uri_t set_control_params_uri = {
             .uri       = "/set_control_params",
@@ -293,6 +315,14 @@ void setup() {
             .user_ctx  = NULL
         };
         httpd_register_uri_handler(server, &set_control_status_uri);
+
+        httpd_uri_t events_uri = {
+            .uri       = "/events",
+            .method    = HTTP_GET,
+            .handler   = events_handler,
+            .user_ctx  = NULL
+        };
+        httpd_register_uri_handler(server, &events_uri);
     }
 }
 
