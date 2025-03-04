@@ -1,0 +1,115 @@
+<mujoco model="robot_leg">
+	<compiler angle="radian" meshdir="assets" autolimits="true"/>
+	<option cone="elliptic" impratio="100"/>
+	<option gravity="0 0 -9.81"/>
+
+	<default>	      
+		<geom type="mesh" xyaxes="1 0 0 0 1 0"/>
+		<default class="our_robot">
+			<geom friction="0.6" margin="0.001" condim="1"/>
+			<joint damping="2" armature="0.01" frictionloss="0.2"/>
+			<position kp="100" forcerange="-27.7 27.7"/>
+			<default class="tigh">
+				<joint range="0 3.14" axis="0 1 0"/>
+				<position ctrlrange=".349 3.14"/>
+			</default>
+			<default class="knee">
+				<joint range="-2.6816 0" axis="0 1 0"/>
+				<position forcerange="-35.55 35.55" ctrlrange="-2.6816 0"/>
+			</default>
+			  <default class="paw">
+				<geom mass="0.200" priority="1" solimp="0.015 1 0.023" condim="6"
+				friction="2 0.02 0.01"/>
+			</default>
+		</default>
+    </default>
+
+	<asset>
+		<material name="dark" rgba="90 7 0.1 1"/>
+		<mesh name="rigth_calf_mesh" file="rigth_calf.stl" scale=".01 .01 .01" />
+		<mesh name="left_calf_mesh" file="left_calf.stl" scale=".01 .01 .01" />
+		<mesh name="left_tigh_mesh" file="left_tigh_mesh.stl" scale=".01 .01 .01" />
+		<mesh name="rigth_tigh_mesh" file="rigth_tigh_mesh.stl" scale=".01 .01 .01" />
+		<mesh name="paw" file="paw.stl" scale=".01 .01 .01"/>	
+		<mesh name="chasis" file="chasis.stl" scale=".01 .01 .01" />
+	</asset>
+
+	<worldbody>
+
+		<body name="trunk" childclass="our_robot" pos="0 0 1">
+			<camera name="tracking" mode="trackcom" pos="0 -1 0.8" xyaxes="1 0 0 0 1 1"/>
+			<geom contype="0" conaffinity="0" mesh="chasis" mass="1.157"/>
+			<joint type="free"/>
+			
+			<body name="FL_tigh" pos=".92 1.02 .045">
+				<geom mesh="left_tigh_mesh" mass=".01377"/>
+				<joint class="tigh" name="FL_tigh_joint" pos="-.1 0 0"/>
+				<body name="FL_calf" pos=".973 .173 -.048">
+					<geom mesh="left_calf_mesh" mass=".01036"/>
+					<joint class="knee" name="FL_knee_joint" pos="-.35 0 .04"/>
+					<body name="FL_paw" pos=".66 0 -.20" quat="0 -0.35836795 0 0.92387953"><!---->
+						<geom mesh="paw" class="paw"/>
+					</body>
+				</body>
+			</body>
+
+			<body name="FR_tigh" pos=".92 -1.03 .045">
+				<geom mesh="rigth_tigh_mesh" mass=".01377"/>
+				<joint class="tigh" name="FR_tigh_joint" pos="-.1 0 0"/>
+				<body name="FR_calf" pos=".973 -.173 -.048">
+					<geom mesh="rigth_calf_mesh" mass=".01036"/>
+					<joint class="knee" name="FR_knee_joint" pos="-.35 0 .04"/>
+					<body name="FR_paw" pos=".66 0 -.20" quat="0 -0.35836795 0 0.92387953"><!---->
+						<geom mesh="paw" class="paw"/>
+					</body>
+				</body>
+			</body>
+		
+			<body name="BL_tigh" pos="-1.15 1.02 -.08">
+				<geom mesh="left_tigh_mesh" mass=".01377"/>
+				<joint class="tigh" name="BL_tigh_joint" pos="-.1 0 0"/>
+				<body name="BL_calf" pos=".973 .173 -.048">
+					<geom mesh="left_calf_mesh" mass=".01036"/>
+					<joint class="knee" name="BL_knee_joint" pos="-.35 0 .04"/>
+					<body name="BL_paw" pos=".66 0 -.20" quat="0 -0.35836795 0 0.92387953"><!---->
+						<geom mesh="paw" class="paw"/>
+					</body>
+				</body>
+			</body>
+
+			<body name="BR_tigh" pos="-1.15 -1.03 -.08">
+				<geom mesh="rigth_tigh_mesh" mass=".01377"/>
+				<joint class="tigh" name="BR_tigh_joint" pos="-.1 0 0"/>
+				<body name="BR_calf" pos=".973 -.173 -.048">
+					<geom mesh="rigth_calf_mesh" mass=".01036"/>
+					<joint class="knee" name="BR_knee_joint" pos="-.35 0 .04"/>
+					<body name="BR_paw" pos=".66 0 -.20" quat="0 -0.35836795 0 0.92387953"><!---->
+						<geom mesh="paw" class="paw"/>
+					</body>
+				</body>
+			</body>
+		</body>
+
+	</worldbody>
+
+	<actuator>
+		<position class="tigh" name="FR_tigh_actuator" joint="FR_tigh_joint"/>
+		<position class="knee" name="FR_knee_actuator" joint="FR_knee_joint"/>
+		<!---->
+		<position class="tigh" name="BR_tigh_actuator" joint="BR_tigh_joint"/>
+		<position class="knee" name="BR_knee_actuator" joint="BR_knee_joint"/>
+		<!---->
+		<position class="tigh" name="FL_tigh_actuator" joint="FL_tigh_joint"/>
+		<position class="knee" name="FL_knee_actuator" joint="FL_knee_joint"/>
+		<!---->
+		<position class="tigh" name="BL_tigh_actuator" joint="BL_tigh_joint"/>
+		<position class="knee" name="BL_knee_actuator" joint="BL_knee_joint"/>
+	</actuator>
+
+	<!--0 0 1.5 0 0 0 0 -->
+	<keyframe>
+		<key name="home"
+		qpos="0 0 1.5 0 0 0 0 2.36619 -1.5708 2.36619 -1.5708 2.36619 -1.5708 2.36619 -1.5708"
+		ctrl="2.35619 -1.5708 2.35619 -1.5708 2.35619 -1.5708 2.35619 -1.5708"/>
+	</keyframe>
+</mujoco>
