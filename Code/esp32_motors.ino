@@ -1,13 +1,14 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <esp_http_server.h>
+#include <ArduinoJson.h> // Needed for JSON in SSE
 
 // WiFi credentials
 #define SSID "Wifi de sparky"
 #define PASSWORD "$famcruz$"
 #define PORT 82
 
-// Pin variables (initial defaults)
+// Pin variables (default values)
 int ENCODER_A = 8;
 int ENCODER_B = 18;
 int IN1 = 12;
@@ -34,17 +35,10 @@ float integralError = 0;
 unsigned long lastTime = 0;
 const unsigned long dt = 2;
 
-// Logging
-unsigned long lastLogTime = 0;
-const unsigned long LOG_INTERVAL = 100;
-
-// Control status
-bool control_enabled = true;
-
 // HTTP server handle
 httpd_handle_t server = NULL;
 
-// **Interrupt Handlers**
+// Interrupt Handlers
 void IRAM_ATTR handleEncoderA() {
     bool encAVal = digitalRead(ENCODER_A);
     bool encBVal = digitalRead(ENCODER_B);
@@ -65,17 +59,17 @@ void IRAM_ATTR handleEncoderB() {
     }
 }
 
-// **Motor Control Functions**
+// Motor Control Functions
 void setMotor(int power) {
     if (power == 0) {
-        ledcWrite(IN1, 255);  // IN1 HIGH (brake)
-        ledcWrite(IN2, 255);  // IN2 HIGH
+        ledcWrite(IN1, 255);  // Brake
+        ledcWrite(IN2, 255);
     } else if (power > 0) {
-        ledcWrite(IN2, 0);    // IN2 LOW
-        ledcWrite(IN1, power); // IN1 PWM
+        ledcWrite(IN2, 0);
+        ledcWrite(IN1, power);
     } else {
-        ledcWrite(IN1, 0);    // IN1 LOW
-        ledcWrite(IN2, -power); // IN2 PWM
+        ledcWrite(IN1, 0);
+        ledcWrite(IN2, -power);
     }
 }
 
@@ -100,28 +94,18 @@ int computePower(long error, long errorDelta) {
     return constrain(power, -MAX_POWER, MAX_POWER);
 }
 
-// **HTTP URI Handlers**
+// HTTP URI Handlers
 static esp_err_t set_control_params_handler(httpd_req_t *req) {
     char query[128];
     if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK) {
         char buf[20];
-        if (httpd_query_key_value(query, "P", buf, sizeof(buf)) == ESP_OK) {
-            kp = atof(buf);
-        }
-        if (httpd_query_key_value(query, "I", buf, sizeof(buf)) == ESP_OK) {
-            ki = atof(buf);
-        }
-        if (httpd_query_key_value(query, "D", buf, sizeof(buf)) == ESP_OK) {
-            kd = atof(buf);
-        }
-        if (httpd_query_key_value(query, "dead_zone", buf, sizeof(buf)) == ESP_OK) {
-            DEAD_ZONE = atoi(buf);
-        }
-        if (httpd_query_key_value(query, "pos_thresh", buf, sizeof(buf)) == ESP_OK) {
-            POSITION_THRESHOLD = atoi(buf);
-        }
+        if (httpd_query_key_value(query, "P", buf, sizeof(buf)) == ESP_OK) kp = atof(buf);
+        if (httpd_query_key_value(query, "I", buf, sizeof(buf)) == ESP_OK) ki = atof(buf);
+        if (httpd_query_key_value(query, "D", buf, sizeof(buf)) == ESP_OK) kd = atof(buf);
+        if (httpd_query_key_value(query, "dead_zone", buf, sizeof(buf)) == ESP_OK) DEAD_ZONE = atoi(buf);
+        if (httpd_query_key_value(query, "pos_thresh", buf, sizeof(buf)) == ESP_OK) POSITION_THRESHOLD = atoi(buf);
     }
-    return httpd_resp_send(req, "OK", 2);
+    return httpd_resp_send(req, "K", 1); // Minimal response
 }
 
 static esp_err_t set_angle_handler(httpd_req_t *req) {
@@ -133,7 +117,7 @@ static esp_err_t set_angle_handler(httpd_req_t *req) {
             targetPos = angle * COUNTS_PER_REV / 360;
         }
     }
-    return httpd_resp_send(req, "OK", 2);
+    return httpd_resp_send(req, "K", 1); // Super fast response
 }
 
 static esp_err_t set_pins_handler(httpd_req_t *req) {
@@ -145,20 +129,11 @@ static esp_err_t set_pins_handler(httpd_req_t *req) {
         int new_IN1 = IN1;
         int new_IN2 = IN2;
 
-        if (httpd_query_key_value(query, "ENCODER_A", buf, sizeof(buf)) == ESP_OK) {
-            new_ENCODER_A = atoi(buf);
-        }
-        if (httpd_query_key_value(query, "ENCODER_B", buf, sizeof(buf)) == ESP_OK) {
-            new_ENCODER_B = atoi(buf);
-        }
-        if (httpd_query_key_value(query, "IN1", buf, sizeof(buf)) == ESP_OK) {
-            new_IN1 = atoi(buf);
-        }
-        if (httpd_query_key_value(query, "IN2", buf, sizeof(buf)) == ESP_OK) {
-            new_IN2 = atoi(buf);
-        }
+        if (httpd_query_key_value(query, "ENCODER_A", buf, sizeof(buf)) == ESP_OK) new_ENCODER_A = atoi(buf);
+        if (httpd_query_key_value(query, "ENCODER_B", buf, sizeof(buf)) == ESP_OK) new_ENCODER_B = atoi(buf);
+        if (httpd_query_key_value(query, "IN1", buf, sizeof(buf)) == ESP_OK) new_IN1 = atoi(buf);
+        if (httpd_query_key_value(query, "IN2", buf, sizeof(buf)) == ESP_OK) new_IN2 = atoi(buf);
 
-        // Update encoder pins
         if (new_ENCODER_A != ENCODER_A || new_ENCODER_B != ENCODER_B) {
             detachInterrupt(digitalPinToInterrupt(ENCODER_A));
             detachInterrupt(digitalPinToInterrupt(ENCODER_B));
@@ -170,7 +145,6 @@ static esp_err_t set_pins_handler(httpd_req_t *req) {
             attachInterrupt(digitalPinToInterrupt(ENCODER_B), handleEncoderB, CHANGE);
         }
 
-        // Update motor pins
         if (new_IN1 != IN1 || new_IN2 != IN2) {
             ledcDetach(IN1);
             ledcDetach(IN2);
@@ -182,7 +156,7 @@ static esp_err_t set_pins_handler(httpd_req_t *req) {
             ledcAttach(IN2, 1000, 8);
         }
     }
-    return httpd_resp_send(req, "OK", 2);
+    return httpd_resp_send(req, "K", 1);
 }
 
 static esp_err_t get_angle_handler(httpd_req_t *req) {
@@ -198,35 +172,31 @@ static esp_err_t get_encoderPos_handler(httpd_req_t *req) {
     return httpd_resp_send(req, buf, strlen(buf));
 }
 
-static esp_err_t set_control_status_handler(httpd_req_t *req) {
-    char query[128];
-    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK) {
-        char buf[20];
-        if (httpd_query_key_value(query, "status", buf, sizeof(buf)) == ESP_OK) {
-            control_enabled = atoi(buf) != 0;
-        }
-    }
-    return httpd_resp_send(req, "OK", 2);
-}
-
 static esp_err_t events_handler(httpd_req_t *req) {
     httpd_resp_set_type(req, "text/event-stream");
     httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
     httpd_resp_set_hdr(req, "Connection", "keep-alive");
 
+    StaticJsonDocument<128> doc;
+
     while (true) {
-        float angle = (float)encoderPos * 360 / COUNTS_PER_REV;
-        char event[64];
-        snprintf(event, sizeof(event), "data: %f\n\n", angle);
+        doc["angle"] = (float)encoderPos * 360 / COUNTS_PER_REV;
+        doc["encoderPos"] = encoderPos;
+
+        char json[128];
+        size_t len = serializeJson(doc, json);
+
+        char event[256];
+        snprintf(event, sizeof(event), "data: %s\n\n", json);
+
         if (httpd_resp_send_chunk(req, event, strlen(event)) != ESP_OK) {
-            break; // Exit if client disconnects
+            break; // Client disconnected
         }
-        delay(2); // Send updates every 2 ms
+        delay(2); // 2 ms updates
     }
     return ESP_OK;
 }
 
-// **Setup Function**
 void setup() {
     Serial.begin(115200);
 
@@ -236,15 +206,11 @@ void setup() {
     pinMode(IN1, OUTPUT);
     pinMode(IN2, OUTPUT);
 
-    // Configure PWM for IN1 and IN2
-    ledcAttach(IN1, 1000, 8); // 1kHz, 8-bit resolution
-    ledcAttach(IN2, 1000, 8); // 1kHz, 8-bit resolution
-
-    // Initialize motor to brake
-    ledcWrite(IN1, 255);
+    ledcAttach(IN1, 1000, 8);
+    ledcAttach(IN2, 1000, 8);
+    ledcWrite(IN1, 255); // Brake
     ledcWrite(IN2, 255);
 
-    // Attach interrupts
     attachInterrupt(digitalPinToInterrupt(ENCODER_A), handleEncoderA, CHANGE);
     attachInterrupt(digitalPinToInterrupt(ENCODER_B), handleEncoderB, CHANGE);
 
@@ -259,74 +225,32 @@ void setup() {
     Serial.print("IP address: ");
     Serial.println(WiFi.localIP());
 
-    // Start HTTP server with optimized configuration
+    // Start HTTP server
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = PORT;
-    config.core_id = 0;              // Pin HTTP server to Core 0
-    config.keep_alive_enable = true; // Enable keep-alive for persistent connections
-    config.keep_alive_idle = 5;      // Max idle time before closing connection (seconds)
-    config.keep_alive_interval = 3;  // Time between keep-alive probes (seconds)
-    config.keep_alive_count = 3;     // Number of probes before closing
+    config.core_id = 0;
+    config.keep_alive_enable = true;
     if (httpd_start(&server, &config) == ESP_OK) {
-        httpd_uri_t set_control_params_uri = {
-            .uri       = "/set_control_params",
-            .method    = HTTP_GET,
-            .handler   = set_control_params_handler,
-            .user_ctx  = NULL
-        };
+        httpd_uri_t set_control_params_uri = { .uri = "/set_control_params", .method = HTTP_GET, .handler = set_control_params_handler, .user_ctx = NULL };
         httpd_register_uri_handler(server, &set_control_params_uri);
 
-        httpd_uri_t set_angle_uri = {
-            .uri       = "/set_angle",
-            .method    = HTTP_GET,
-            .handler   = set_angle_handler,
-            .user_ctx  = NULL
-        };
+        httpd_uri_t set_angle_uri = { .uri = "/set_angle", .method = HTTP_GET, .handler = set_angle_handler, .user_ctx = NULL };
         httpd_register_uri_handler(server, &set_angle_uri);
 
-        httpd_uri_t set_pins_uri = {
-            .uri       = "/set_pins",
-            .method    = HTTP_GET,
-            .handler   = set_pins_handler,
-            .user_ctx  = NULL
-        };
+        httpd_uri_t set_pins_uri = { .uri = "/set_pins", .method = HTTP_GET, .handler = set_pins_handler, .user_ctx = NULL };
         httpd_register_uri_handler(server, &set_pins_uri);
 
-        httpd_uri_t get_angle_uri = {
-            .uri       = "/get_angle",
-            .method    = HTTP_GET,
-            .handler   = get_angle_handler,
-            .user_ctx  = NULL
-        };
+        httpd_uri_t get_angle_uri = { .uri = "/get_angle", .method = HTTP_GET, .handler = get_angle_handler, .user_ctx = NULL };
         httpd_register_uri_handler(server, &get_angle_uri);
 
-        httpd_uri_t get_encoderPos_uri = {
-            .uri       = "/get_encoderPos",
-            .method    = HTTP_GET,
-            .handler   = get_encoderPos_handler,
-            .user_ctx  = NULL
-        };
+        httpd_uri_t get_encoderPos_uri = { .uri = "/get_encoderPos", .method = HTTP_GET, .handler = get_encoderPos_handler, .user_ctx = NULL };
         httpd_register_uri_handler(server, &get_encoderPos_uri);
 
-        httpd_uri_t set_control_status_uri = {
-            .uri       = "/set_control_status",
-            .method    = HTTP_GET,
-            .handler   = set_control_status_handler,
-            .user_ctx  = NULL
-        };
-        httpd_register_uri_handler(server, &set_control_status_uri);
-
-        httpd_uri_t events_uri = {
-            .uri       = "/events",
-            .method    = HTTP_GET,
-            .handler   = events_handler,
-            .user_ctx  = NULL
-        };
+        httpd_uri_t events_uri = { .uri = "/events", .method = HTTP_GET, .handler = events_handler, .user_ctx = NULL };
         httpd_register_uri_handler(server, &events_uri);
     }
 }
 
-// **Loop Function**
 void loop() {
     if (millis() - lastTime >= dt) {
         long error = targetPos - encoderPos;
@@ -334,14 +258,12 @@ void loop() {
         lastError = error;
 
         int power = 0;
-        if (control_enabled) {
-            if (abs(error) < MAX_POWER / ki) {
-                integralError += error * (dt / 1000.0);
-            } else {
-                integralError = constrain(integralError, -MAX_POWER/ki, MAX_POWER/ki);
-            }
-            power = computePower(error, errorDelta);
+        if (abs(error) < MAX_POWER / ki) {
+            integralError += error * (dt / 1000.0);
+        } else {
+            integralError = constrain(integralError, -MAX_POWER/ki, MAX_POWER/ki);
         }
+        power = computePower(error, errorDelta);
         setMotor(power);
         lastTime = millis();
     }
