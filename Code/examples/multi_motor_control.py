@@ -22,7 +22,7 @@ MOTOR_0 = 0
 MOTOR_1 = 1
 
 # Set initial PID parameters (applies to both motors)
-body.set_control_params(0.9, 0.001, 0.3, 10, 5)
+body.set_control_params(P=0.9, I=0.001, D=0.3, dead_zone=10, pos_thresh=5)
 
 # Set pins and enable control for both motors
 # Motor 0

@@ -40,7 +40,7 @@ struct Motor {
 };
 
 // Number of motors (adjust as needed)
-const int NUM_MOTORS = 2;
+const int NUM_MOTORS = 8;
 Motor motors[NUM_MOTORS];
 
 // Interrupt Handlers
