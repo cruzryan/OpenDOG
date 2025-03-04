@@ -1,20 +1,14 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <esp_http_server.h>
-#include <ArduinoJson.h> // Needed for JSON in SSE
+#include <ArduinoJson.h>
 
 // WiFi credentials
 #define SSID "Wifi de sparky"
 #define PASSWORD "$famcruz$"
 #define PORT 82
 
-// Pin variables (default values)
-int ENCODER_A = 8;
-int ENCODER_B = 18;
-int IN1 = 12;
-int IN2 = 11;
-
-// Control parameters
+// Control parameters (shared across all motors)
 float kp = 0.9;
 float ki = 0.001;
 float kd = 0.3;
@@ -25,12 +19,6 @@ int POSITION_THRESHOLD = 5;
 // Encoder constants
 const int COUNTS_PER_REV = 1975;
 
-// Variables
-volatile long encoderPos = 0;
-long targetPos = 0;
-long lastError = 0;
-float integralError = 0;
-
 // Timing
 unsigned long lastTime = 0;
 const unsigned long dt = 2;
@@ -38,44 +26,63 @@ const unsigned long dt = 2;
 // HTTP server handle
 httpd_handle_t server = NULL;
 
+// Motor structure to hold per-motor data
+struct Motor {
+    int ENCODER_A;
+    int ENCODER_B;
+    int IN1;
+    int IN2;
+    volatile long encoderPos;
+    long targetPos;
+    long lastError;
+    float integralError;
+    bool controlEnabled;
+};
+
+// Number of motors (adjust as needed)
+const int NUM_MOTORS = 2;
+Motor motors[NUM_MOTORS];
+
 // Interrupt Handlers
-void IRAM_ATTR handleEncoderA() {
-    bool encAVal = digitalRead(ENCODER_A);
-    bool encBVal = digitalRead(ENCODER_B);
+void IRAM_ATTR handleEncoderA(void* arg) {
+    Motor* motor = (Motor*)arg;
+    bool encAVal = digitalRead(motor->ENCODER_A);
+    bool encBVal = digitalRead(motor->ENCODER_B);
     if (encAVal == encBVal) {
-        encoderPos--;
+        motor->encoderPos--;
     } else {
-        encoderPos++;
+        motor->encoderPos++;
     }
 }
 
-void IRAM_ATTR handleEncoderB() {
-    bool encAVal = digitalRead(ENCODER_A);
-    bool encBVal = digitalRead(ENCODER_B);
+void IRAM_ATTR handleEncoderB(void* arg) {
+    Motor* motor = (Motor*)arg;
+    bool encAVal = digitalRead(motor->ENCODER_A);
+    bool encBVal = digitalRead(motor->ENCODER_B);
     if (encAVal == encBVal) {
-        encoderPos++;
+        motor->encoderPos++;
     } else {
-        encoderPos--;
+        motor->encoderPos--;
     }
 }
 
 // Motor Control Functions
-void setMotor(int power) {
+void setMotor(int motorIndex, int power) {
+    Motor &motor = motors[motorIndex];
     if (power == 0) {
-        ledcWrite(IN1, 255);  // Brake
-        ledcWrite(IN2, 255);
+        ledcWrite(motor.IN1, 255);  // Brake
+        ledcWrite(motor.IN2, 255);
     } else if (power > 0) {
-        ledcWrite(IN2, 0);
-        ledcWrite(IN1, power);
+        ledcWrite(motor.IN2, 0);
+        ledcWrite(motor.IN1, power);
     } else {
-        ledcWrite(IN1, 0);
-        ledcWrite(IN2, -power);
+        ledcWrite(motor.IN1, 0);
+        ledcWrite(motor.IN2, -power);
     }
 }
 
 int computePower(long error, long errorDelta) {
     if (abs(error) <= DEAD_ZONE) {
-        integralError = 0;
         return 0;
     }
 
@@ -83,15 +90,30 @@ int computePower(long error, long errorDelta) {
     float dt_sec = dt / 1000.0;
 
     float p_term = kp * scaled_error * MAX_POWER;
-    float i_term = ki * integralError;
     float d_term = kd * (errorDelta / dt_sec);
 
     if (abs(error) <= DEAD_ZONE * 5) {
         d_term *= 3.0;
     }
 
-    int power = p_term + i_term + constrain(d_term, -MAX_POWER/2, MAX_POWER/2);
+    int power = p_term + constrain(d_term, -MAX_POWER / 2, MAX_POWER / 2);
     return constrain(power, -MAX_POWER, MAX_POWER);
+}
+
+void controlMotor(int motorIndex) {
+    Motor &motor = motors[motorIndex];
+    long error = motor.targetPos - motor.encoderPos;
+    long errorDelta = error - motor.lastError;
+    motor.lastError = error;
+
+    if (abs(error) < MAX_POWER / ki) {
+        motor.integralError += error * (dt / 1000.0);
+    } else {
+        motor.integralError = constrain(motor.integralError, -MAX_POWER / ki, MAX_POWER / ki);
+    }
+
+    int power = computePower(error, errorDelta) + ki * motor.integralError; // Add integral term here
+    setMotor(motorIndex, power);
 }
 
 // HTTP URI Handlers
@@ -105,71 +127,177 @@ static esp_err_t set_control_params_handler(httpd_req_t *req) {
         if (httpd_query_key_value(query, "dead_zone", buf, sizeof(buf)) == ESP_OK) DEAD_ZONE = atoi(buf);
         if (httpd_query_key_value(query, "pos_thresh", buf, sizeof(buf)) == ESP_OK) POSITION_THRESHOLD = atoi(buf);
     }
-    return httpd_resp_send(req, "K", 1); // Minimal response
+    return httpd_resp_send(req, "K", 1);
 }
 
 static esp_err_t set_angle_handler(httpd_req_t *req) {
     char query[128];
     if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK) {
         char buf[20];
+        int motorIndex;
+        if (httpd_query_key_value(query, "motor", buf, sizeof(buf)) == ESP_OK) {
+            motorIndex = atoi(buf);
+            if (motorIndex < 0 || motorIndex >= NUM_MOTORS) {
+                return httpd_resp_send(req, "Invalid motor index", 18);
+            }
+        } else {
+            return httpd_resp_send(req, "Missing motor index", 19);
+        }
+
         if (httpd_query_key_value(query, "a", buf, sizeof(buf)) == ESP_OK) {
             int angle = atoi(buf);
-            targetPos = angle * COUNTS_PER_REV / 360;
+            motors[motorIndex].targetPos = angle * COUNTS_PER_REV / 360;
         }
     }
-    return httpd_resp_send(req, "K", 1); // Super fast response
+    return httpd_resp_send(req, "K", 1);
 }
 
 static esp_err_t set_pins_handler(httpd_req_t *req) {
     char query[128];
     if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK) {
         char buf[20];
-        int new_ENCODER_A = ENCODER_A;
-        int new_ENCODER_B = ENCODER_B;
-        int new_IN1 = IN1;
-        int new_IN2 = IN2;
+        int motorIndex;
+        if (httpd_query_key_value(query, "motor", buf, sizeof(buf)) == ESP_OK) {
+            motorIndex = atoi(buf);
+            if (motorIndex < 0 || motorIndex >= NUM_MOTORS) {
+                return httpd_resp_send(req, "Invalid motor index", 18);
+            }
+        } else {
+            return httpd_resp_send(req, "Missing motor index", 19);
+        }
+
+        Motor &motor = motors[motorIndex];
+
+        int new_ENCODER_A = motor.ENCODER_A;
+        int new_ENCODER_B = motor.ENCODER_B;
+        int new_IN1 = motor.IN1;
+        int new_IN2 = motor.IN2;
 
         if (httpd_query_key_value(query, "ENCODER_A", buf, sizeof(buf)) == ESP_OK) new_ENCODER_A = atoi(buf);
         if (httpd_query_key_value(query, "ENCODER_B", buf, sizeof(buf)) == ESP_OK) new_ENCODER_B = atoi(buf);
         if (httpd_query_key_value(query, "IN1", buf, sizeof(buf)) == ESP_OK) new_IN1 = atoi(buf);
         if (httpd_query_key_value(query, "IN2", buf, sizeof(buf)) == ESP_OK) new_IN2 = atoi(buf);
 
-        if (new_ENCODER_A != ENCODER_A || new_ENCODER_B != ENCODER_B) {
-            detachInterrupt(digitalPinToInterrupt(ENCODER_A));
-            detachInterrupt(digitalPinToInterrupt(ENCODER_B));
-            ENCODER_A = new_ENCODER_A;
-            ENCODER_B = new_ENCODER_B;
-            pinMode(ENCODER_A, INPUT_PULLUP);
-            pinMode(ENCODER_B, INPUT_PULLUP);
-            attachInterrupt(digitalPinToInterrupt(ENCODER_A), handleEncoderA, CHANGE);
-            attachInterrupt(digitalPinToInterrupt(ENCODER_B), handleEncoderB, CHANGE);
+        // Detach interrupts from old pins if they were previously set
+        if (motor.ENCODER_A != -1) {
+            detachInterrupt(digitalPinToInterrupt(motor.ENCODER_A));
+        }
+        if (motor.ENCODER_B != -1) {
+            detachInterrupt(digitalPinToInterrupt(motor.ENCODER_B));
         }
 
-        if (new_IN1 != IN1 || new_IN2 != IN2) {
-            ledcDetach(IN1);
-            ledcDetach(IN2);
-            IN1 = new_IN1;
-            IN2 = new_IN2;
-            pinMode(IN1, OUTPUT);
-            pinMode(IN2, OUTPUT);
-            ledcAttach(IN1, 1000, 8);
-            ledcAttach(IN2, 1000, 8);
+        // Update pins
+        motor.ENCODER_A = new_ENCODER_A;
+        motor.ENCODER_B = new_ENCODER_B;
+        motor.IN1 = new_IN1;
+        motor.IN2 = new_IN2;
+
+        // Configure encoder pins
+        if (motor.ENCODER_A != -1) {
+            pinMode(motor.ENCODER_A, INPUT_PULLUP);
+            attachInterruptArg(digitalPinToInterrupt(motor.ENCODER_A), handleEncoderA, &motor, CHANGE);
+        }
+        if (motor.ENCODER_B != -1) {
+            pinMode(motor.ENCODER_B, INPUT_PULLUP);
+            attachInterruptArg(digitalPinToInterrupt(motor.ENCODER_B), handleEncoderB, &motor, CHANGE);
+        }
+
+        // Configure motor pins
+        if (motor.IN1 != -1) {
+            pinMode(motor.IN1, OUTPUT);
+            ledcAttach(motor.IN1, 1000, 8);
+            ledcWrite(motor.IN1, 255); // Brake
+        }
+        if (motor.IN2 != -1) {
+            pinMode(motor.IN2, OUTPUT);
+            ledcAttach(motor.IN2, 1000, 8);
+            ledcWrite(motor.IN2, 255); // Brake
         }
     }
     return httpd_resp_send(req, "K", 1);
 }
 
 static esp_err_t get_angle_handler(httpd_req_t *req) {
-    float angle = (float)encoderPos * 360 / COUNTS_PER_REV;
-    char buf[20];
-    snprintf(buf, sizeof(buf), "%f", angle);
-    return httpd_resp_send(req, buf, strlen(buf));
+    char query[128];
+    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK) {
+        char buf[20];
+        int motorIndex;
+        if (httpd_query_key_value(query, "motor", buf, sizeof(buf)) == ESP_OK) {
+            motorIndex = atoi(buf);
+            if (motorIndex < 0 || motorIndex >= NUM_MOTORS) {
+                return httpd_resp_send(req, "Invalid motor index", 18);
+            }
+        } else {
+            return httpd_resp_send(req, "Missing motor index", 19);
+        }
+
+        float angle = (float)motors[motorIndex].encoderPos * 360 / COUNTS_PER_REV;
+        char response[20];
+        snprintf(response, sizeof(response), "%f", angle);
+        return httpd_resp_send(req, response, strlen(response));
+    }
+    return httpd_resp_send(req, "Missing motor param", 19);
 }
 
 static esp_err_t get_encoderPos_handler(httpd_req_t *req) {
-    char buf[20];
-    snprintf(buf, sizeof(buf), "%ld", encoderPos);
-    return httpd_resp_send(req, buf, strlen(buf));
+    char query[128];
+    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK) {
+        char buf[20];
+        int motorIndex;
+        if (httpd_query_key_value(query, "motor", buf, sizeof(buf)) == ESP_OK) {
+            motorIndex = atoi(buf);
+            if (motorIndex < 0 || motorIndex >= NUM_MOTORS) {
+                return httpd_resp_send(req, "Invalid motor index", 18);
+            }
+        } else {
+            return httpd_resp_send(req, "Missing motor index", 19);
+        }
+
+        char response[20];
+        snprintf(response, sizeof(response), "%ld", motors[motorIndex].encoderPos);
+        return httpd_resp_send(req, response, strlen(response));
+    }
+    return httpd_resp_send(req, "Missing motor param", 19);
+}
+
+static esp_err_t set_control_status_handler(httpd_req_t *req) {
+    char query[128];
+    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK) {
+        char buf[20];
+        int motorIndex;
+        if (httpd_query_key_value(query, "motor", buf, sizeof(buf)) == ESP_OK) {
+            motorIndex = atoi(buf);
+            if (motorIndex < 0 || motorIndex >= NUM_MOTORS) {
+                return httpd_resp_send(req, "Invalid motor index", 18);
+            }
+        } else {
+            return httpd_resp_send(req, "Missing motor index", 19);
+        }
+
+        if (httpd_query_key_value(query, "status", buf, sizeof(buf)) == ESP_OK) {
+            int status = atoi(buf);
+            motors[motorIndex].controlEnabled = (status != 0);
+        }
+    }
+    return httpd_resp_send(req, "K", 1);
+}
+
+static esp_err_t reset_handler(httpd_req_t *req) {
+    char query[128];
+    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK) {
+        char buf[20];
+        int motorIndex;
+        if (httpd_query_key_value(query, "motor", buf, sizeof(buf)) == ESP_OK) {
+            motorIndex = atoi(buf);
+            if (motorIndex < 0 || motorIndex >= NUM_MOTORS) {
+                return httpd_resp_send(req, "Invalid motor index", 18);
+            }
+            motors[motorIndex].encoderPos = 0;
+        } else {
+            return httpd_resp_send(req, "Missing motor index", 19);
+        }
+    }
+    return httpd_resp_send(req, "K", 1);
 }
 
 static esp_err_t events_handler(httpd_req_t *req) {
@@ -177,22 +305,23 @@ static esp_err_t events_handler(httpd_req_t *req) {
     httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
     httpd_resp_set_hdr(req, "Connection", "keep-alive");
 
-    StaticJsonDocument<128> doc;
-
     while (true) {
-        doc["angle"] = (float)encoderPos * 360 / COUNTS_PER_REV;
-        doc["encoderPos"] = encoderPos;
-
-        char json[128];
-        size_t len = serializeJson(doc, json);
-
-        char event[256];
-        snprintf(event, sizeof(event), "data: %s\n\n", json);
-
-        if (httpd_resp_send_chunk(req, event, strlen(event)) != ESP_OK) {
-            break; // Client disconnected
+        StaticJsonDocument<256> doc;
+        JsonArray angles = doc.createNestedArray("angles");
+        JsonArray encoderPos = doc.createNestedArray("encoderPos");
+        for (int i = 0; i < NUM_MOTORS; i++) {
+            float angle = (float)motors[i].encoderPos * 360 / COUNTS_PER_REV;
+            angles.add(angle);
+            encoderPos.add(motors[i].encoderPos);
         }
-        delay(2); // 2 ms updates
+        char json[256];
+        size_t len = serializeJson(doc, json);
+        char event[512];
+        snprintf(event, sizeof(event), "data: %s\n\n", json);
+        if (httpd_resp_send_chunk(req, event, strlen(event)) != ESP_OK) {
+            break;
+        }
+        delay(2);
     }
     return ESP_OK;
 }
@@ -200,19 +329,18 @@ static esp_err_t events_handler(httpd_req_t *req) {
 void setup() {
     Serial.begin(115200);
 
-    // Initialize pins
-    pinMode(ENCODER_A, INPUT_PULLUP);
-    pinMode(ENCODER_B, INPUT_PULLUP);
-    pinMode(IN1, OUTPUT);
-    pinMode(IN2, OUTPUT);
-
-    ledcAttach(IN1, 1000, 8);
-    ledcAttach(IN2, 1000, 8);
-    ledcWrite(IN1, 255); // Brake
-    ledcWrite(IN2, 255);
-
-    attachInterrupt(digitalPinToInterrupt(ENCODER_A), handleEncoderA, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(ENCODER_B), handleEncoderB, CHANGE);
+    // Initialize all motors with control OFF and invalid pins
+    for (int i = 0; i < NUM_MOTORS; i++) {
+        motors[i].ENCODER_A = -1;
+        motors[i].ENCODER_B = -1;
+        motors[i].IN1 = -1;
+        motors[i].IN2 = -1;
+        motors[i].encoderPos = 0;
+        motors[i].targetPos = 0;
+        motors[i].lastError = 0;
+        motors[i].integralError = 0;
+        motors[i].controlEnabled = false; // Control OFF for all motors at start
+    }
 
     // Connect to WiFi
     WiFi.begin(SSID, PASSWORD);
@@ -246,6 +374,12 @@ void setup() {
         httpd_uri_t get_encoderPos_uri = { .uri = "/get_encoderPos", .method = HTTP_GET, .handler = get_encoderPos_handler, .user_ctx = NULL };
         httpd_register_uri_handler(server, &get_encoderPos_uri);
 
+        httpd_uri_t set_control_status_uri = { .uri = "/set_control_status", .method = HTTP_GET, .handler = set_control_status_handler, .user_ctx = NULL };
+        httpd_register_uri_handler(server, &set_control_status_uri);
+
+        httpd_uri_t reset_uri = { .uri = "/reset", .method = HTTP_GET, .handler = reset_handler, .user_ctx = NULL };
+        httpd_register_uri_handler(server, &reset_uri);
+
         httpd_uri_t events_uri = { .uri = "/events", .method = HTTP_GET, .handler = events_handler, .user_ctx = NULL };
         httpd_register_uri_handler(server, &events_uri);
     }
@@ -253,18 +387,13 @@ void setup() {
 
 void loop() {
     if (millis() - lastTime >= dt) {
-        long error = targetPos - encoderPos;
-        long errorDelta = error - lastError;
-        lastError = error;
-
-        int power = 0;
-        if (abs(error) < MAX_POWER / ki) {
-            integralError += error * (dt / 1000.0);
-        } else {
-            integralError = constrain(integralError, -MAX_POWER/ki, MAX_POWER/ki);
+        for (int i = 0; i < NUM_MOTORS; i++) {
+            if (motors[i].controlEnabled) {
+                controlMotor(i);
+            } else {
+                setMotor(i, 0); // Brake when control is off
+            }
         }
-        power = computePower(error, errorDelta);
-        setMotor(power);
         lastTime = millis();
     }
 }
