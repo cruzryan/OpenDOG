@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Cuadruped Stream</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .data-box { margin-bottom: 20px; }
+    h2 { color: #333; }
+    pre { background: #f4f4f4; padding: 10px; border-radius: 5px; }
+  </style>
+</head>
+<body>
+  <h1>Cuadruped Stream</h1>
+  
+  <div class="data-box">
+    <h2>IMU Data</h2>
+    <pre id="imu-data">Waiting for data...</pre>
+  </div>
+  
+  <div class="data-box">
+    <h2>ADS1115 Data</h2>
+    <pre id="ads-data">Waiting for data...</pre>
+  </div>
+
+  <script>
+    const evtSource = new EventSource("c/events"); // Replace with your ESP32 IP
+    evtSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      
+      // Update IMU display
+      if (data.imu) {
+        const imu = data.imu;
+        document.getElementById("imu-data").textContent = `
+          Accel X: ${imu.accel_x.toFixed(2)} m/s²
+          Accel Y: ${imu.accel_y.toFixed(2)} m/s²
+          Accel Z: ${imu.accel_z.toFixed(2)} m/s²
+          Gyro X: ${imu.gyro_x.toFixed(2)} rad/s
+          Gyro Y: ${imu.gyro_y.toFixed(2)} rad/s
+          Gyro Z: ${imu.gyro_z.toFixed(2)} rad/s
+          Temp: ${imu.temp.toFixed(2)} °C
+        `;
+      }
+      
+      // Update ADS display
+      if (data.ads) {
+        const ads = data.ads;
+        document.getElementById("ads-data").textContent = `
+          A0: ${ads.A0}
+          A1: ${ads.A1}
+          A2: ${ads.A2}
+          A3: ${ads.A3}
+        `;
+      }
+    };
+    evtSource.onerror = (err) => {
+      console.error("EventSource failed:", err);
+      document.getElementById("imu-data").textContent = "Connection lost!";
+      document.getElementById("ads-data").textContent = "Connection lost!";
+    };
+  </script>
+</body>
+</html>
