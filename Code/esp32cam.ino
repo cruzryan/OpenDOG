@@ -9,20 +9,20 @@
 #include "esp_http_server.h"
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
-#include <Wire.h>              // Using standard Wire.h
-#include <ArduinoJson.h>       // For creating JSON responses
-#include <Adafruit_ADS1X15.h>  // Added for ADS1115 support
-
+#include <Wire.h>
+#include <ArduinoJson.h>
+#include <Adafruit_ADS1X15.h>
+#include <base64.h>
 // Define the MIN macro
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
-// Replace with your network credentials
-const char *ssid = "Wifi de sparky";
-const char *password = "$famcruz$";
+// Network credentials
+const char *ssid = "TT";
+const char *password = "12345678";
 
 #define PART_BOUNDARY "123456789000000000000987654321"
 
-// Define the camera model
+// Camera model
 #define CAMERA_MODEL_AI_THINKER
 
 #if defined(CAMERA_MODEL_AI_THINKER)
@@ -54,21 +54,19 @@ httpd_handle_t stream_httpd = NULL;
 framesize_t current_framesize = FRAMESIZE_VGA;
 bool frame_size_changed = false;
 
-// --- IMU Setup ---
-#define I2C_SDA 14  // SDA Connected to GPIO 14
-#define I2C_SCL 15  // SCL Connected to GPIO 15
+// IMU Setup
+#define I2C_SDA 14
+#define I2C_SCL 15
 Adafruit_MPU6050 mpu;
 
-// --- ADS1115 Setup ---
-Adafruit_ADS1115 ads;  // ADS1115 instance with address 0x48
+// ADS1115 Setup
+Adafruit_ADS1115 ads;
 
-// --- JSON Buffers ---
-StaticJsonDocument<200> imu_doc;  // For IMU data
-char imu_json_buffer[200];
-StaticJsonDocument<200> ads_doc;  // For ADS data
-char ads_json_buffer[200];
+// JSON Buffers
+StaticJsonDocument<512> event_doc; // Larger buffer for combined data
+char event_json_buffer[512];
 
-// --- Stream Handler ---
+// Stream Handler (Original)
 static esp_err_t stream_handler(httpd_req_t *req) {
   camera_fb_t *fb = NULL;
   esp_err_t res = ESP_OK;
@@ -77,9 +75,7 @@ static esp_err_t stream_handler(httpd_req_t *req) {
   char *part_buf[64];
 
   res = httpd_resp_set_type(req, _STREAM_CONTENT_TYPE);
-  if (res != ESP_OK) {
-    return res;
-  }
+  if (res != ESP_OK) return res;
 
   while (true) {
     if (frame_size_changed) {
@@ -93,19 +89,17 @@ static esp_err_t stream_handler(httpd_req_t *req) {
       Serial.println("Camera capture failed");
       res = ESP_FAIL;
     } else {
-      if (fb->width > 400) {
-        if (fb->format != PIXFORMAT_JPEG) {
-          bool jpeg_converted = frame2jpg(fb, 80, &_jpg_buf, &_jpg_buf_len);
-          esp_camera_fb_return(fb);
-          fb = NULL;
-          if (!jpeg_converted) {
-            Serial.println("JPEG compression failed");
-            res = ESP_FAIL;
-          }
-        } else {
-          _jpg_buf_len = fb->len;
-          _jpg_buf = fb->buf;
+      if (fb->format != PIXFORMAT_JPEG) {
+        bool jpeg_converted = frame2jpg(fb, 80, &_jpg_buf, &_jpg_buf_len);
+        esp_camera_fb_return(fb);
+        fb = NULL;
+        if (!jpeg_converted) {
+          Serial.println("JPEG compression failed");
+          res = ESP_FAIL;
         }
+      } else {
+        _jpg_buf_len = fb->len;
+        _jpg_buf = fb->buf;
       }
     }
     if (res == ESP_OK) {
@@ -126,31 +120,26 @@ static esp_err_t stream_handler(httpd_req_t *req) {
       free(_jpg_buf);
       _jpg_buf = NULL;
     }
-    if (res != ESP_OK) {
-      break;
-    }
+    if (res != ESP_OK) break;
   }
   return res;
 }
 
-// --- Command Handler ---
+// Command Handler
 static esp_err_t cmd_handler(httpd_req_t *req) {
   char buf[100];
   int ret, remaining = req->content_len;
 
   while (remaining > 0) {
     if ((ret = httpd_req_recv(req, buf, MIN(remaining, sizeof(buf)))) <= 0) {
-      if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
-        continue;
-      }
+      if (ret == HTTPD_SOCK_ERR_TIMEOUT) continue;
       return ESP_FAIL;
     }
-    buf[ret] = 0; // Null-terminate
+    buf[ret] = 0;
     String command = String(buf);
     if (command.startsWith("framesize:")) {
       String framesize_str = command.substring(10);
-      Serial.print("Changing framesize to: ");
-      Serial.println(framesize_str);
+      Serial.println("Changing framesize to: " + framesize_str);
 
       if (framesize_str == "96X96") current_framesize = FRAMESIZE_96X96;
       else if (framesize_str == "QQVGA") current_framesize = FRAMESIZE_QQVGA;
@@ -170,22 +159,20 @@ static esp_err_t cmd_handler(httpd_req_t *req) {
       else if (framesize_str == "UXGA") current_framesize = FRAMESIZE_UXGA;
 
       frame_size_changed = true;
-      Serial.print("Frame size set to: ");
-      Serial.println(framesize_str);
+      Serial.println("Frame size set to: " + framesize_str);
     }
     remaining -= ret;
   }
-
   httpd_resp_send(req, NULL, 0);
   return ESP_OK;
 }
 
-// --- IMU Data Handler ---
+// IMU Data Handler (Original)
 static esp_err_t imu_data_handler(httpd_req_t *req) {
   sensors_event_t a, g, temp;
   mpu.getEvent(&a, &g, &temp);
 
-  imu_doc.clear();
+  StaticJsonDocument<200> imu_doc;
   imu_doc["accel_x"] = a.acceleration.x;
   imu_doc["accel_y"] = a.acceleration.y;
   imu_doc["accel_z"] = a.acceleration.z;
@@ -194,6 +181,7 @@ static esp_err_t imu_data_handler(httpd_req_t *req) {
   imu_doc["gyro_z"] = g.gyro.z;
   imu_doc["temp"] = temp.temperature;
 
+  char imu_json_buffer[200];
   serializeJson(imu_doc, imu_json_buffer);
 
   httpd_resp_set_type(req, "application/json");
@@ -201,19 +189,20 @@ static esp_err_t imu_data_handler(httpd_req_t *req) {
   return ESP_OK;
 }
 
-// --- ADS Data Handler ---
+// ADS Data Handler (Original)
 static esp_err_t ads_data_handler(httpd_req_t *req) {
-  int16_t a0 = ads.readADC_SingleEnded(0);  // Read A0
-  int16_t a1 = ads.readADC_SingleEnded(1);  // Read A1
-  int16_t a2 = ads.readADC_SingleEnded(2);  // Read A2
-  int16_t a3 = ads.readADC_SingleEnded(3);  // Read A3
+  int16_t a0 = ads.readADC_SingleEnded(0);
+  int16_t a1 = ads.readADC_SingleEnded(1);
+  int16_t a2 = ads.readADC_SingleEnded(2);
+  int16_t a3 = ads.readADC_SingleEnded(3);
 
-  ads_doc.clear();
+  StaticJsonDocument<200> ads_doc;
   ads_doc["A0"] = a0;
   ads_doc["A1"] = a1;
   ads_doc["A2"] = a2;
   ads_doc["A3"] = a3;
 
+  char ads_json_buffer[200];
   serializeJson(ads_doc, ads_json_buffer);
 
   httpd_resp_set_type(req, "application/json");
@@ -221,58 +210,94 @@ static esp_err_t ads_data_handler(httpd_req_t *req) {
   return ESP_OK;
 }
 
-// --- Start HTTP Server ---
+// New Events Handler (SSE)
+static esp_err_t events_handler(httpd_req_t *req) {
+  httpd_resp_set_type(req, "text/event-stream");
+  httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+  httpd_resp_set_hdr(req, "Connection", "keep-alive");
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+
+  // Smaller buffers since no image data
+  char event_json_buffer[256]; // Reduced from 2048
+  StaticJsonDocument<256> event_doc; // Reduced from 2048
+
+  while (true) {
+    event_doc.clear();
+
+    // IMU Data
+    sensors_event_t a, g, temp;
+    mpu.getEvent(&a, &g, &temp);
+    JsonObject imu = event_doc.createNestedObject("imu");
+    imu["accel_x"] = a.acceleration.x;
+    imu["accel_y"] = a.acceleration.y;
+    imu["accel_z"] = a.acceleration.z;
+    imu["gyro_x"] = g.gyro.x;
+    imu["gyro_y"] = g.gyro.y;
+    imu["gyro_z"] = g.gyro.z;
+    imu["temp"] = temp.temperature;
+
+    // ADS Data
+    JsonObject ads_data = event_doc.createNestedObject("ads");
+    ads_data["A0"] = ads.readADC_SingleEnded(0);
+    ads_data["A1"] = ads.readADC_SingleEnded(1);
+    ads_data["A2"] = ads.readADC_SingleEnded(2);
+    ads_data["A3"] = ads.readADC_SingleEnded(3);
+
+    // Serialize and send
+    size_t json_len = serializeJson(event_doc, event_json_buffer, sizeof(event_json_buffer));
+    if (json_len == 0) {
+      Serial.println("JSON serialization failed or buffer too small");
+      delay(50);
+      continue;
+    }
+
+    char event[512]; // Reduced from 2300
+    int event_len = snprintf(event, sizeof(event), "data: %s\n\n", event_json_buffer);
+    if (event_len >= sizeof(event)) {
+      Serial.println("Event buffer overflow!");
+      delay(50);
+      continue;
+    }
+
+    if (httpd_resp_send_chunk(req, event, event_len) != ESP_OK) {
+      Serial.println("Failed to send chunk");
+      break;
+    }
+    delay(2); // Adjust as needed
+  }
+  return ESP_OK;
+}
+
+// Start HTTP Server
 void startCameraServer() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.server_port = 81;
+  config.keep_alive_enable = true;
 
-  httpd_uri_t stream_uri = {
-    .uri       = "/stream",
-    .method    = HTTP_GET,
-    .handler   = stream_handler,
-    .user_ctx  = NULL
-  };
-
-  httpd_uri_t cmd_uri = {
-    .uri       = "/control",
-    .method    = HTTP_POST,
-    .handler   = cmd_handler,
-    .user_ctx  = NULL
-  };
-
-  httpd_uri_t imu_data_uri = {
-    .uri       = "/imu_data",
-    .method    = HTTP_GET,
-    .handler   = imu_data_handler,
-    .user_ctx  = NULL
-  };
-
-  httpd_uri_t ads_data_uri = {
-    .uri       = "/ads_data",
-    .method    = HTTP_GET,
-    .handler   = ads_data_handler,
-    .user_ctx  = NULL
-  };
+  httpd_uri_t stream_uri = { .uri = "/stream", .method = HTTP_GET, .handler = stream_handler, .user_ctx = NULL };
+  httpd_uri_t cmd_uri = { .uri = "/control", .method = HTTP_POST, .handler = cmd_handler, .user_ctx = NULL };
+  httpd_uri_t imu_data_uri = { .uri = "/imu_data", .method = HTTP_GET, .handler = imu_data_handler, .user_ctx = NULL };
+  httpd_uri_t ads_data_uri = { .uri = "/ads_data", .method = HTTP_GET, .handler = ads_data_handler, .user_ctx = NULL };
+  httpd_uri_t events_uri = { .uri = "/events", .method = HTTP_GET, .handler = events_handler, .user_ctx = NULL };
 
   if (httpd_start(&stream_httpd, &config) == ESP_OK) {
     httpd_register_uri_handler(stream_httpd, &stream_uri);
     httpd_register_uri_handler(stream_httpd, &cmd_uri);
     httpd_register_uri_handler(stream_httpd, &imu_data_uri);
-    httpd_register_uri_handler(stream_httpd, &ads_data_uri);  // Register ADS data handler
+    httpd_register_uri_handler(stream_httpd, &ads_data_uri);
+    httpd_register_uri_handler(stream_httpd, &events_uri);
   }
 }
 
-// --- Setup Function ---
+// Setup Function
 void setup() {
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
-
   Serial.begin(115200);
   Serial.setDebugOutput(false);
 
-  // --- I2C and Sensor Initialization ---
-  Wire.begin(I2C_SDA, I2C_SCL, 100000);  // Initialize I2C on pins 14 and 15
+  // I2C and Sensor Initialization
+  Wire.begin(I2C_SDA, I2C_SCL, 100000);
 
-  // MPU6050 Initialization
   while (!mpu.begin(0x68, &Wire)) {
     Serial.println("Failed to find MPU6050 chip, waiting...");
     delay(1000);
@@ -282,15 +307,13 @@ void setup() {
   mpu.setGyroRange(MPU6050_RANGE_500_DEG);
   mpu.setFilterBandwidth(MPU6050_BAND_5_HZ);
 
-  // ADS1115 Initialization
   while (!ads.begin(0x48, &Wire)) {
     Serial.println("Failed to initialize ADS1115, waiting...");
     delay(1000);
-
   }
   Serial.println("ADS1115 Initialized");
 
-  // --- Camera Initialization ---
+  // Camera Initialization
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
   config.ledc_timer = LEDC_TIMER_0;
@@ -329,7 +352,7 @@ void setup() {
     return;
   }
 
-  // --- WiFi Connection ---
+  // WiFi Connection
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -338,7 +361,7 @@ void setup() {
   Serial.println("");
   Serial.println("WiFi connected");
 
-  // --- Print URLs ---
+  // Print URLs
   Serial.print("Camera Stream Ready! Go to: http://");
   Serial.print(WiFi.localIP());
   Serial.println(":81/stream");
@@ -348,11 +371,14 @@ void setup() {
   Serial.print("ADS Data Ready! Go to: http://");
   Serial.print(WiFi.localIP());
   Serial.println(":81/ads_data");
+  Serial.print("Events Ready! Go to: http://");
+  Serial.print(WiFi.localIP());
+  Serial.println(":81/events");
 
   startCameraServer();
 }
 
-// --- Loop Function ---
+// Loop Function
 void loop() {
-  delay(1);  // Keep loop minimal for HTTP server responsiveness
+  delay(1); // Keep server responsive
 }
