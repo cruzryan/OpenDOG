@@ -18,6 +18,6 @@ Low cost quadruped robot with SDK and Mujoco simulations, trained with Reinforce
 ## Authors
 
 - Ryan Nathanael Cruz Barragan [@ryancruzb](https://www.github.com/ryancruzb)
-- Mauricio Emiliano Ruiz Alamilla
+- Mauricio Emiliano Ruiz Alamilla [@MaudorElConquistador](https://www.github.com/MaudorElConquistador)
 
 

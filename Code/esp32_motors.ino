@@ -4,8 +4,8 @@
 #include <ArduinoJson.h>
 
 // WiFi credentials
-#define SSID "Wifi de sparky"
-#define PASSWORD "$famcruz$"
+#define SSID "TT"
+#define PASSWORD "12345678"
 #define PORT 82
 
 // Control parameters (shared across all motors)
