@@ -9,15 +9,8 @@ from environments.jump_environment import JumpEnvironmentV0
 from .VideoRecorder import VideoRecorderCallback
 import os
 
-config = {
-	"policy": 'MlpPolicy',
-	"total_timesteps": 30000000,
-	"verbose": 1,
-	"video_duration": 10  # Duración en segundos
-}
 
 def create_vec_env(env_id, n_envs, seed=None):
-	"""Crea el entorno vectorizado para entrenamiento."""
 	env_class = WalkEnvironmentV0 if env_id == "walk" else JumpEnvironmentV0
 	vec_env = make_vec_env(
 		env_class,
@@ -32,7 +25,7 @@ if __name__ == "__main__":
 	# Argumentos del script
 	parser = ArgumentParser()
 	parser.add_argument('motion', choices=["walk", "jump"], help="Specify the motion type: 'walk' or 'jump'")
-	parser.add_argument('--frequency', type=int, default=3000000, help="Frequency of video recording in steps")
+	parser.add_argument('--frequency', type=int, default=1000000, help="Frequency of video recording in steps")
 	parser.add_argument('--duration', type=int, default=10, help="Duration of each video in seconds")
 	parser.add_argument('--fps', type=int, default=30, help="Frames per second for the video")
 	parser.add_argument('--n_envs', type=int, default=4, help="Number of parallel environments")
@@ -48,24 +41,34 @@ if __name__ == "__main__":
 	eval_env_class = WalkEnvironmentV0 if env_id == "walk" else JumpEnvironmentV0
 	eval_env = make_vec_env(
 		eval_env_class,
-		n_envs=1,
-		vec_env_cls=DummyVecEnv,
+		n_envs=n_envs,
+		vec_env_cls=SubprocVecEnv,
 		env_kwargs={"render_mode": "rgb_array"}
 	)
 
 	# Directorios de salida
+	tensorboard_dir = f"./ppo_robot_tensorboard/{args.motion}/"
 	video_output_dir = f"./videos/{args.motion}/"
 	model_output_dir = f"./models/{args.motion}/"
 	best_model_path = os.path.join(model_output_dir, "best_model")
 	os.makedirs(video_output_dir, exist_ok=True)
 	os.makedirs(model_output_dir, exist_ok=True)
+	os.makedirs(tensorboard_dir, exist_ok=True)
 
 	# Inicializa y entrena el modelo
 	model = PPO(
-		config["policy"], 
-		vec_env, 
-		tensorboard_log="../logs/",  # Monitorización
-		verbose=config["verbose"]
+		policy = "MlpPolicy",
+		verbose = 2,
+		env=vec_env, 
+		learning_rate=1e-4,            # Más bajo que el default (3e-4)
+		n_steps=2048,                  # Muestras por iteración
+		batch_size=512,                # Tamaño de batch
+		n_epochs=10,                   # Épocas de optimización por iteración
+		gamma=0.99,                    # Factor de descuento
+		ent_coef=.001,                 # Fomenta exploración
+		clip_range=0.2,                # Clipping de políticas
+		max_grad_norm=0.5,             # Evita gradientes explosivos
+		tensorboard_log=tensorboard_dir     # Monitorización
 	)
 
 	# Callback para grabación de videos
@@ -91,7 +94,7 @@ if __name__ == "__main__":
 
 	try:
 		model.learn(
-			total_timesteps=config["total_timesteps"],
+			total_timesteps = 30000000,
 			callback=[video_callback, eval_callback],
 			reset_num_timesteps=False,
 			progress_bar=True

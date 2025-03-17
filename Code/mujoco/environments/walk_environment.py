@@ -59,7 +59,8 @@ class WalkEnvironmentV0(MujocoEnv):
 		observation = self._get_obs()
 		reward, reward_info = self._calculate_rewards(action)
 		
-		terminated = not self.utils.is_healthy(self.data.qpos, self.data.qvel)
+		terminated = not self.utils.is_healthy(self.data.qpos, self.data.qvel) and \
+					not self.data.qvel[0] < self.utils.desired_velocity_min[0]
 		truncated = self._step >= (self._max_episode_time_sec / self.dt)
 		
 		info = {
@@ -82,38 +83,29 @@ class WalkEnvironmentV0(MujocoEnv):
 		reward = max(0.0, rewards - costs)
 		
 		reward_info = {
-			"linear_vel_tracking_reward": self.utils.linear_velocity_tracking_reward(self.data.qvel[:2]),
-			"reward_ctrl": self.utils.torque_cost(self.data.qfrc_actuator[-12:]),
-			"reward_survive": self.utils.healthy_reward(self.data.qpos, self.data.qvel),
+			"linear_vel_tracking_reward": self.utils.linear_velocity_tracking_reward(self.data.qvel[:2], self.data.qpos[0]),
+			"reward_ctrl": self.utils.torque_cost(self.data.qfrc_actuator[-8:]),
 		}
 		
-		if self._debug:
-			self._debug_rewards_costs(rewards, costs)
 		
 		return reward, reward_info
 	
-	""" + self.utils.healthy_reward(self.data.qpos, self.data.qvel) * self.utils.reward_weights["healthy"]
-		+ self.utils.feet_air_time_reward(self.dt, self.data.cfrc_ext) * self.utils.reward_weights["feet_airtime"]
-		+ self.utils.diagonal_gait_reward(self.dt, self.data.cfrc_ext)
-	"""
-	
 	def _calculate_positive_rewards(self):
 		return (
-			+ self.utils.healthy_reward(self.data.qpos, self.data.qvel) * self.utils.reward_weights["healthy"]
-			+ self.utils.linear_velocity_tracking_reward(self.data.qvel[:2]) * self.utils.reward_weights["linear_vel_tracking"]
-			+ self.utils.get_reward_distance(self.data.qpos)
-			+ self.utils.get_reward_ground_reaction_force(self.data, self.model)
+			+ self.utils.linear_velocity_tracking_reward(self.data.qvel[:2], self.data.qpos[0]) * self.utils.reward_weights["linear_vel_tracking"]
+			+ self.utils.get_reward_safe_range(self.data.qpos, self.data.qvel) * self.utils.reward_weights["healthy"]
 			+ self.utils.angular_velocity_tracking_reward(self.data.qvel[5]) * self.utils.reward_weights["angular_vel_tracking"]
+			+ self.utils.diagonal_gait_reward(self.data, self.model) * self.utils.reward_weights["diagonal_gait_reward"]
+			+ self.utils.feet_air_time_reward(self.dt, self.data, self.model) * self.utils.reward_weights["feet_airtime"]
 		)
 
-# 	+ self.utils.collision_cost(self.data.cfrc_ext) * self.utils.cost_weights["collision"]
-
+	#+ self.utils.non_flat_base_cost(self.data.qpos[3:7]) * self.utils.cost_weights["orientation"]
 	def _calculate_negative_costs(self, action):
 		return (
-			+ self.utils.torque_cost(self.data.qfrc_actuator[-8:])
+			+ self.utils.get_cost_distance(self.data.qpos[0]) * self.utils.cost_weights["cost_distance"]
+			+ self.utils.torque_cost(self.data.qfrc_actuator[-8:]) * self.utils.cost_weights["torque"]
 			+ self.utils.action_rate_cost(action) * self.utils.cost_weights["action_rate"]
 			+ self.utils.vertical_velocity_cost(self.data.qvel[2]) * self.utils.cost_weights["vertical_vel"]
-			+ self.utils.non_flat_base_cost(self.data.qpos[3:7]) * self.utils.cost_weights["orientation"]
 			+ self.utils.default_joint_position_cost(self.data.qpos[7:]) * self.utils.cost_weights["default_joint_position"]
 		)
 
@@ -135,7 +127,6 @@ class WalkEnvironmentV0(MujocoEnv):
 			(
 				base_linear_velocity * self.utils.obs_scale["linear_velocity"],
 				base_angular_velocity * self.utils.obs_scale["angular_velocity"],
-				projected_gravity,
 				desired_vel * self.utils.obs_scale["linear_velocity"],
 				dofs_position * self.utils.obs_scale["dofs_position"],
 				dofs_velocity * self.utils.obs_scale["dofs_velocity"],

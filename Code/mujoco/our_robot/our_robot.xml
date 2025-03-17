@@ -8,7 +8,7 @@
 		<default class="our_robot">
 			<geom friction="0.6" margin="0.001" condim="1"/>
 			<joint damping="2" armature="0.01" frictionloss="0.2"/>
-			<position kp="100" forcerange="-27.7 27.7"/>
+			<position kp="100" forcerange="-35.7 35.7"/>
 			<default class="tigh">
 				<joint range="0 3.14" axis="0 1 0"/>
 				<position ctrlrange=".349 3.14"/>
@@ -18,8 +18,8 @@
 				<position forcerange="-35.55 35.55" ctrlrange="-2.6816 0"/>
 			</default>
 			  <default class="paw">
-				<geom mass="0.200" priority="1" solimp="0.015 1 0.023" condim="6"
-				friction="2 0.02 0.01"/>
+				<geom mass=".100" priority="1" solimp="0.015 1 0.023" condim="6"
+				friction="1.5 1.5 .01"/>
 			</default>
 		</default>
     </default>
@@ -41,7 +41,7 @@
 			<geom contype="0" conaffinity="0" mesh="chasis" mass="1.157"/>
 			<joint type="free"/>
 			
-			<body name="FL_tigh" pos=".92 1.02 .045">
+			<body name="FL_tigh" pos=".92 1.02 -.01">
 				<geom mesh="left_tigh_mesh" mass=".01377"/>
 				<joint class="tigh" name="FL_tigh_joint" pos="-.1 0 0"/>
 				<body name="FL_calf" pos=".973 .173 -.048">
@@ -53,7 +53,7 @@
 				</body>
 			</body>
 
-			<body name="FR_tigh" pos=".92 -1.03 .045">
+			<body name="FR_tigh" pos=".92 -1.03 -.01">
 				<geom mesh="rigth_tigh_mesh" mass=".01377"/>
 				<joint class="tigh" name="FR_tigh_joint" pos="-.1 0 0"/>
 				<body name="FR_calf" pos=".973 -.173 -.048">
@@ -65,7 +65,7 @@
 				</body>
 			</body>
 		
-			<body name="BL_tigh" pos="-1.15 1.02 -.08">
+			<body name="BL_tigh" pos="-1.15 1.02 0">
 				<geom mesh="left_tigh_mesh" mass=".01377"/>
 				<joint class="tigh" name="BL_tigh_joint" pos="-.1 0 0"/>
 				<body name="BL_calf" pos=".973 .173 -.048">
@@ -77,7 +77,7 @@
 				</body>
 			</body>
 
-			<body name="BR_tigh" pos="-1.15 -1.03 -.08">
+			<body name="BR_tigh" pos="-1.15 -1.03 0">
 				<geom mesh="rigth_tigh_mesh" mass=".01377"/>
 				<joint class="tigh" name="BR_tigh_joint" pos="-.1 0 0"/>
 				<body name="BR_calf" pos=".973 -.173 -.048">

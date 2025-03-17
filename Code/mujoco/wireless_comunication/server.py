@@ -1,7 +1,8 @@
 import socket
 
-import jax
 from jax import numpy as jp
+import jax
+import numpy as np
 import threading
 import time
 import struct
@@ -11,16 +12,14 @@ import mujoco._functions
 import mujoco._simulate
 from mujoco import mjx
 from mujoco.mjx._src.types import ConeType
-import numpy as np
-
 import mujoco.plugin
+from rewards.walk_environment_reward_calc import WalkEnvironmentRewardCalc
+
 
 class mujoco_communication:
     def __init__(self, simulate_instance, sending_frequency=30):
-        """
-        Inicializa el servidor de movilidad.
-        """
-        print("Servidor de movilidad inicializado")
+        print("Servidor de movilidad inicializado")        
+        self.walk_rewards = None
         self._simulate_instance = simulate_instance
         self.socket_thread = threading.Thread(target=self._socket_server_loop)
         self.socket_thread.daemon = True
@@ -93,72 +92,6 @@ class mujoco_communication:
             print(body_indices)
             return body_indices
 
-    def detect_paws(self):
-        d = self._simulate_instance.d
-        m = self._simulate_instance.m
-        paws_in_ground = [False, False, False, False]
-        contacts = np.zeros((3,6))
-        for i in (0,4):
-            mujoco._functions.mj_contactForce(m, d, 1, contacts[i])
-
-        return []
-    
-    """
-    """
-    def paws_in_ground(self):
-        d = self._simulate_instance.d
-        m = self._simulate_instance.m
-        paws_body_indexes = [4, 7, 10, 13] 
-        ground_body_index = 0
-        paws_contact_id = [-1,-1,-1,-1]
-        
-        paw_index_to_contact_index = {} 
-
-        for contact_index in range(d.ncon): 
-            contact = d.contact[contact_index] 
-            
-            geom1 = contact.geom1
-            geom2 = contact.geom2
-
-            for paw_index_enum, paw_body_index in enumerate(paws_body_indexes):
-                if (geom1 == ground_body_index and m.geom_bodyid[geom2] == paw_body_index) or \
-                   (geom2 == ground_body_index and m.geom_bodyid[geom1] == paw_body_index):
-                    paws_contact_id[paw_index_enum] = contact_index
-                    paw_index_to_contact_index[paw_body_index] = contact_index
-                    break
-
-        return paws_contact_id, paw_index_to_contact_index
-
-
-    def get_paw_contact_forces(self):
-        d = self._simulate_instance.d
-        m = self._simulate_instance.m
-        paws_body_indexes = [4, 7, 10, 13]
-        paw_contact_forces = {paw_body_index: np.zeros(6) for paw_body_index in paws_body_indexes}
-        paw_contact_indices, paw_index_to_contact_index = self.paws_in_ground()
-
-        for paw_body_index in paws_body_indexes:
-            contact_index = paw_index_to_contact_index.get(paw_body_index, -1)
-
-            if contact_index != -1:
-                force_array = np.zeros(6)
-                mujoco._functions.mj_contactForce(m, d, contact_index, force_array)
-                paw_contact_forces[paw_body_index] = force_array
-            else:
-                paw_contact_forces[paw_body_index] = np.zeros(6)
-
-        return paw_contact_forces
-
-    def get_reward_ground_reaction_force(
-            self,
-            data,
-            model):
-        forces = self.get_paw_contact_forces()
-        reward = 0
-        for i in [4, 7, 10, 13]:
-            reward = reward + forces[i][0]
-        return reward
-
     def _get_simulation_data(self):
         d = self._simulate_instance.d
         m = self._simulate_instance.m
@@ -166,15 +99,7 @@ class mujoco_communication:
         qvel_data = d.qvel[0:3].flat.copy()
         control_data = d.ctrl.flat.copy()
         timestamp = time.time()
-
-        paw_contact_forces = self.get_paw_contact_forces()
-
-        print(paw_contact_forces[4][0])
-        print(self.get_reward_ground_reaction_force(d,m))
-
-        contact_forces_data = d.qfrc_applied[:]
-        
-
+        paw_contact_forces = self.walk_rewards.get_paw_contact_forces(d, m)
         num_qpos = len(m.qpos0)
         num_qvel = m.nv
         num_act = m.na
@@ -186,20 +111,24 @@ class mujoco_communication:
             'num_act': num_act,
             'qpos_data': qpos_data.tolist(),
             'qvel_data': qvel_data.tolist(),
-            'act_data': control_data.tolist(),
-            'contact_forces_data': contact_forces_data.tolist(),
+            'ctr_data': control_data.tolist(),
+            'contact_forces_data': np.concatenate(list(paw_contact_forces.values())).tolist(),
             'active_contacts' : d.ncon
         }
 
     def _send_simulation_data_udp(self, server_socket, client_address):
         d = self._simulate_instance.d
         if d is not None: 
+            self.walk_rewards = WalkEnvironmentRewardCalc(gravity=self._simulate_instance.m.opt.gravity,
+                            default_joint_position=self._simulate_instance.m.key_ctrl[0],
+                            actuator_range=self._simulate_instance.m.actuator_ctrlrange)
+
             with self._simulate_instance.lock():  # Critic area protection
                 data_dict = self._get_simulation_data()
                 data_to_send = msgpack.packb(data_dict)
                 try:
                     server_socket.sendto(data_to_send, client_address)
                 except Exception as e:
-                    print(f"Error al enviar datos de simulación por UDP (MessagePack): {e}")
+                    print(f"Error al enviar datos de simulación por UDP (MessagePack): {e.with_traceback}")
         else:
             print("Error: Datos de MuJoCo no disponibles, no se pueden enviar datos de sensores.")
