@@ -23,7 +23,7 @@
   </div>
 
   <script>
-    const evtSource = new EventSource("c/events"); // Replace with your ESP32 IP
+    const evtSource = new EventSource("http://192.168.137.250:81/events"); // Replace with your ESP32 IP
     evtSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
       

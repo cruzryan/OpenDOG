@@ -329,7 +329,43 @@ static esp_err_t events_handler(httpd_req_t *req) {
 void setup() {
     Serial.begin(115200);
 
-    // Initialize all motors with control OFF and invalid pins
+    // Initialize GPIO pins as OUTPUT and set to LOW
+    // Exclude GPIO0, GPIO3 (JTAG), GPIO19, GPIO20 (USB pins), GPIO26 (SUBSPIO), GPIO43 (TX), GPIO44 (RX), GPIO45, GPIO46 (strapping pins)
+    // GPIO1 to GPIO2
+    for (int pin = 1; pin <= 2; pin++) {
+        pinMode(pin, OUTPUT);
+        digitalWrite(pin, LOW);
+        Serial.printf("Set GPIO%d to LOW\n", pin);
+    }
+
+    // GPIO4 to GPIO18
+    for (int pin = 4; pin <= 18; pin++) {
+        pinMode(pin, OUTPUT);
+        digitalWrite(pin, LOW);
+        Serial.printf("Set GPIO%d to LOW\n", pin);
+    }
+
+    // GPIO21
+    pinMode(21, OUTPUT);
+    digitalWrite(21, LOW);
+    Serial.println("Set GPIO21 to LOW");
+
+    // GPIO35 to GPIO42
+    for (int pin = 35; pin <= 42; pin++) {
+        pinMode(pin, OUTPUT);
+        digitalWrite(pin, LOW);
+        Serial.printf("Set GPIO%d to LOW\n", pin);
+    }
+
+    // GPIO47 to GPIO48
+    pinMode(47, OUTPUT);
+    digitalWrite(47, LOW);
+    Serial.println("Set GPIO47 to LOW");
+    pinMode(48, OUTPUT);
+    digitalWrite(48, LOW);
+    Serial.println("Set GPIO48 to LOW");
+
+    // Initialize motor structure
     for (int i = 0; i < NUM_MOTORS; i++) {
         motors[i].ENCODER_A = -1;
         motors[i].ENCODER_B = -1;
