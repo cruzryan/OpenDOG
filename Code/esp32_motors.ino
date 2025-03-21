@@ -69,6 +69,7 @@ void IRAM_ATTR handleEncoderB(void* arg) {
 // Motor Control Functions
 void setMotor(int motorIndex, int power) {
     Motor &motor = motors[motorIndex];
+    //Serial.printf("Motor %d: Power = %d, IN1 = %d, IN2 = %d\n", motorIndex, power, motor.IN1, motor.IN2);
     if (power == 0) {
         ledcWrite(motor.IN1, 255);  // Brake
         ledcWrite(motor.IN2, 255);
@@ -112,7 +113,9 @@ void controlMotor(int motorIndex) {
         motor.integralError = constrain(motor.integralError, -MAX_POWER / ki, MAX_POWER / ki);
     }
 
-    int power = computePower(error, errorDelta) + ki * motor.integralError; // Add integral term here
+    int power = computePower(error, errorDelta) + ki * motor.integralError;
+    //Serial.printf("Motor %d: targetPos = %ld, encoderPos = %ld, error = %ld, power = %d\n", 
+       //           motorIndex, motor.targetPos, motor.encoderPos, error, power);
     setMotor(motorIndex, power);
 }
 
@@ -147,6 +150,7 @@ static esp_err_t set_angle_handler(httpd_req_t *req) {
         if (httpd_query_key_value(query, "a", buf, sizeof(buf)) == ESP_OK) {
             int angle = atoi(buf);
             motors[motorIndex].targetPos = angle * COUNTS_PER_REV / 360;
+            //Serial.printf("Motor %d: Set angle = %d, targetPos = %ld\n", motorIndex, angle, motors[motorIndex].targetPos);
         }
     }
     return httpd_resp_send(req, "K", 1);
@@ -195,22 +199,38 @@ static esp_err_t set_pins_handler(httpd_req_t *req) {
         // Configure encoder pins
         if (motor.ENCODER_A != -1) {
             pinMode(motor.ENCODER_A, INPUT_PULLUP);
-            attachInterruptArg(digitalPinToInterrupt(motor.ENCODER_A), handleEncoderA, &motor, CHANGE);
+            if (digitalPinToInterrupt(motor.ENCODER_A) != NOT_AN_INTERRUPT) {
+                attachInterruptArg(digitalPinToInterrupt(motor.ENCODER_A), handleEncoderA, &motor, CHANGE);
+            } else {
+                //Serial.printf("ERROR: GPIO%d cannot be used for interrupts\n", motor.ENCODER_A);
+            }
         }
         if (motor.ENCODER_B != -1) {
             pinMode(motor.ENCODER_B, INPUT_PULLUP);
-            attachInterruptArg(digitalPinToInterrupt(motor.ENCODER_B), handleEncoderB, &motor, CHANGE);
+            if (digitalPinToInterrupt(motor.ENCODER_B) != NOT_AN_INTERRUPT) {
+                attachInterruptArg(digitalPinToInterrupt(motor.ENCODER_B), handleEncoderB, &motor, CHANGE);
+            } else {
+                //Serial.printf("ERROR: GPIO%d cannot be used for interrupts\n", motor.ENCODER_B);
+            }
         }
 
         // Configure motor pins
         if (motor.IN1 != -1) {
             pinMode(motor.IN1, OUTPUT);
+            digitalWrite(motor.IN1, LOW);  // Set to LOW before PWM
             ledcAttach(motor.IN1, 1000, 8);
+            if (ledcRead(motor.IN1) == 0) {
+                //Serial.printf("ERROR: Failed to attach PWM to GPIO%d (IN1)\n", motor.IN1);
+            }
             ledcWrite(motor.IN1, 255); // Brake
         }
         if (motor.IN2 != -1) {
             pinMode(motor.IN2, OUTPUT);
+            digitalWrite(motor.IN2, LOW);  // Set to LOW before PWM
             ledcAttach(motor.IN2, 1000, 8);
+            if (ledcRead(motor.IN2) == 0) {
+                //Serial.printf("ERROR: Failed to attach PWM to GPIO%d (IN2)\n", motor.IN2);
+            }
             ledcWrite(motor.IN2, 255); // Brake
         }
     }
@@ -330,40 +350,38 @@ void setup() {
     Serial.begin(115200);
 
     // Initialize GPIO pins as OUTPUT and set to LOW
-    // Exclude GPIO0, GPIO3 (JTAG), GPIO19, GPIO20 (USB pins), GPIO26 (SUBSPIO), GPIO43 (TX), GPIO44 (RX), GPIO45, GPIO46 (strapping pins)
-    // GPIO1 to GPIO2
     for (int pin = 1; pin <= 2; pin++) {
         pinMode(pin, OUTPUT);
         digitalWrite(pin, LOW);
-        Serial.printf("Set GPIO%d to LOW\n", pin);
+        //Serial.printf("Set GPIO%d to LOW\n", pin);
     }
-
-    // GPIO4 to GPIO18
     for (int pin = 4; pin <= 18; pin++) {
         pinMode(pin, OUTPUT);
         digitalWrite(pin, LOW);
-        Serial.printf("Set GPIO%d to LOW\n", pin);
+        //Serial.printf("Set GPIO%d to LOW\n", pin);
     }
-
-    // GPIO21
     pinMode(21, OUTPUT);
     digitalWrite(21, LOW);
-    Serial.println("Set GPIO21 to LOW");
-
-    // GPIO35 to GPIO42
+    //Serial.println("Set GPIO21 to LOW");
     for (int pin = 35; pin <= 42; pin++) {
         pinMode(pin, OUTPUT);
         digitalWrite(pin, LOW);
-        Serial.printf("Set GPIO%d to LOW\n", pin);
+        //Serial.printf("Set GPIO%d to LOW\n", pin);
     }
-
-    // GPIO47 to GPIO48
     pinMode(47, OUTPUT);
     digitalWrite(47, LOW);
-    Serial.println("Set GPIO47 to LOW");
+    //Serial.println("Set GPIO47 to LOW");
     pinMode(48, OUTPUT);
     digitalWrite(48, LOW);
-    Serial.println("Set GPIO48 to LOW");
+    //Serial.println("Set GPIO48 to LOW");
+
+    // Explicitly initialize motor control pins for FRONT RIGHT TURNING MOTOR
+    pinMode(6, OUTPUT);
+    digitalWrite(6, LOW);
+    //Serial.println("Set GPIO6 to LOW explicitly");
+    pinMode(7, OUTPUT);
+    digitalWrite(7, LOW);
+    //Serial.println("Set GPIO7 to LOW explicitly");
 
     // Initialize motor structure
     for (int i = 0; i < NUM_MOTORS; i++) {
