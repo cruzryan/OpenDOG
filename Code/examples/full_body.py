@@ -14,7 +14,7 @@ if code_dir not in sys.path:
 
 from quadpilot import QuadPilotBody  # Assuming quadpilot.py contains the updated QuadPilotBody class
 
-IP = "192.168.137.36"
+IP = "192.168.137.210"
 
 # Initialize with ESP32's IP address
 body = QuadPilotBody(IP)
@@ -23,7 +23,7 @@ body = QuadPilotBody(IP)
 NUM_MOTORS = 8
 
 # Set initial PID parameters for all motors
-body.set_control_params(0.9, 0.001, 0.3, 10, 5)  # Applies to all motors
+body.set_control_params(0.9, 0.001, 0.3, 5, 5)  # Applies to all motors
 print("Set control parameters for all motors")
 
 # Motor configurations (index: description, pins)
@@ -31,7 +31,7 @@ MOTOR_CONFIGS = [
     (0, "Back Left Arrow Motor (Knee)", 47, 21, 39, 40),
     (1, "Back Left Turning Motor (Hip)", 45, 48, 38, 37),
     (2, "Front Left Arrow Motor (Knee)", 36, 35, 42, 41),
-    (3, "Front Left Turning Motor (Hip)", 19, 20, 2, 1),
+    (3, "Front Left Turning Motor (Hip)", 20, 19, 2, 1),
     (4, "Back Right Arrow Motor (Knee)", 12, 13, 17, 18),
     (5, "Back Right Turning Motor (Hip)", 46, 9, 16, 15),
     (6, "Front Right Arrow Motor (Knee)", 3, 8, 4, 5),
@@ -39,17 +39,16 @@ MOTOR_CONFIGS = [
 ]
 
 
-# pin_configs = [(enc_a, enc_b, in1, in2) for _, _, enc_a, enc_b, in1, in2 in MOTOR_CONFIGS]
+pin_configs = [(enc_a, enc_b, in1, in2) for _, _, enc_a, enc_b, in1, in2 in MOTOR_CONFIGS]
 
-# print("Initializing all motors with set_all_pins")
-# body.set_all_pins(pin_configs)
-# time.sleep(1)
+print("Initializing all motors with set_all_pins")
+reponse = body.set_all_pins(pin_configs)
+print(f"set_all_pins response: {reponse}")
+time.sleep(1)
 
 # Initialize all motors
 for motor_idx, description, enc_a, enc_b, in1, in2 in MOTOR_CONFIGS:
     print(f"Initializing {description} (Motor {motor_idx})")
-    response = body.session.get(f"http://{IP}:82/set_pins?motor={motor_idx}&ENCODER_A={enc_a}&ENCODER_B={enc_b}&IN1={in1}&IN2={in2}")
-    print(f"Set Pins Response: {response.text}")
     time.sleep(0.1)
     response = body.session.get(f"http://{IP}:82/set_control_status?motor={motor_idx}&status=1")
     print(f"Control Status Response: {response.text}")
@@ -162,22 +161,32 @@ def on_press(key):
                     body.set_control_status(motor=i, status=motor_control_enabled)
                     time.sleep(0.5)
         elif key.char == 'a':
-            # Set knee motors to 15, hip motors stay at 0
-            angles[0] = 0  # Back Left Knee
-            angles[2] = 0  # Front Left Knee
-            angles[4] = 15  # Back Right Knee
-            angles[7] = 15  # Front Right Knee
-            angles = [15] * NUM_MOTORS  # Default all to 0
-
+            # Set knees and hips to opposite angles
+            angles = [0] * NUM_MOTORS  # Initialize array
+            # Left side: knees -15, hips +15
+            angles[0] = -0  # Back Left Knee
+            angles[1] = -90   # Back Left Hip (inverse)
+            angles[2] = -0  # Front Left Knee
+            angles[3] = -90   # Front Left Hip (inverse)
+            # Right side: knees +15, hips -15
+            angles[4] = -0   # Back Right Knee
+            angles[5] = 90  # Back Right Hip (inverse)
+            angles[6] = 0   # Front Right Knee
+            angles[7] = 90  # Front Right Hip (inverse)
             set_angles(angles)
         elif key.char == 'd':
-            # Set knee motors to -15, hip motors stay at 0
-            angles[0] = 0  # Back Left Knee
-            angles[2] = 0  # Front Left Knee
-            angles[4] = -15  # Back Right Knee
-            angles[6] = -15  # Front Right Knee
-            angles = [-15] * NUM_MOTORS  # Default all to 0
-
+            # Set knees and hips to opposite angles
+            angles = [0] * NUM_MOTORS  # Initialize array
+            # Left side: knees +15, hips -15
+            angles[0] = 0   # Back Left Knee
+            angles[1] = -0  # Back Left Hip (inverse)
+            angles[2] = 0   # Front Left Knee
+            angles[3] = -0  # Front Left Hip (inverse)
+            # Right side: knees -15, hips +15
+            angles[4] = -0  # Back Right Knee
+            angles[5] = 0   # Back Right Hip (inverse)
+            angles[6] = -0  # Front Right Knee
+            angles[7] = 0   # Front Right Hip (inverse)
             set_angles(angles)
     except AttributeError:
         pass  # Ignore non-character keys

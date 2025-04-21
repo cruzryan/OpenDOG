@@ -80,7 +80,7 @@ class CameraApp:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    camera_ip = "192.168.0.131" # Set your ESP32 camera IP here
+    camera_ip = "192.168.137.52" # Set your ESP32 camera IP here
     app = CameraApp(root, camera_ip)
     root.protocol("WM_DELETE_WINDOW", app.on_closing)
     root.mainloop()

@@ -14,47 +14,48 @@ if code_dir not in sys.path:
 
 from quadpilot import QuadPilotBody  # Assuming quadpilot.py contains the updated QuadPilotBody class
 
-IP = "192.168.137.170"
+IP = "192.168.137.122"
 
 # Initialize with ESP32's IP address
 body = QuadPilotBody(IP)
 
-# Motor index (using motor 0)
-MOTOR_INDEX = 0
+# Motor indices (0-7 for 8 motors)
+NUM_MOTORS = 8
 
-# Set initial PID parameters and pins for motor 0
-body.set_control_params(0.9, 0.001, 0.3, 10, 5)  # Applies to all motors, no motor param needed
+# Set initial PID parameters for all motors
+body.set_control_params(0.9, 0.001, 0.3, 10, 5)  # Applies to all motors
+print("Set control parameters for all motors")
 
-
-# BACK LEFT ARROW MOTOR
-# body.set_pins(motor=MOTOR_INDEX, ENCODER_A=47, ENCODER_B=21, IN1=39, IN2=40)
-
-# BACK LEFT TURNING MOTOR 
-# body.set_pins(motor=MOTOR_INDEX, ENCODER_A=45, ENCODER_B=48, IN1=38, IN2=37)
-
-# FRONT LEFT ARROW MOTOR
-# body.set_pins(motor=MOTOR_INDEX, ENCODER_A=36, ENCODER_B=35, IN1=42, IN2=41)
-
-# FRONT LEFT TURNING MOTORS
-# body.set_pins(motor=MOTOR_INDEX, ENCODER_A=19, ENCODER_B=20, IN1=2, IN2=1)
-
-# BACK RIGHT ARROW MOTOR
-#body.set_pins(motor=MOTOR_INDEX, ENCODER_A=12, ENCODER_B=13, IN1=17, IN2=18)
-
-# BACK RIGHT TURNING MOTOR 
-#body.set_pins(motor=MOTOR_INDEX, ENCODER_A=46, ENCODER_B=9, IN1=16, IN2=15) # HAS ERRROR!!!!!!!!!!!!!!!!!!!!!! PWR WW
-
-# FRONT RIGHT ARROW MOTOR 
-#body.set_pins(motor=MOTOR_INDEX, ENCODER_A=3, ENCODER_B=8, IN1=4, IN2=5)  # HAS ERROR!!!! PWR ww
-
-# FRONT RIGHT TURNING MOTOR
-body.set_pins(motor=MOTOR_INDEX, ENCODER_A=10, ENCODER_B=11, IN1=6, IN2=7)  # HAS ERROR!!!! PWR WW
+# Motor configurations (index: description, pins)
+MOTOR_CONFIGS = [
+    (0, "Back Left Arrow Motor (Knee)", 47, 21, 39, 40),
+    (1, "Back Left Turning Motor (Hip)", 45, 48, 38, 37),
+    (2, "Front Left Arrow Motor (Knee)", 36, 35, 42, 41),
+    (3, "Front Left Turning Motor (Hip)", 20, 19, 2, 1),
+    (4, "Back Right Arrow Motor (Knee)", 12, 13, 17, 18),
+    (5, "Back Right Turning Motor (Hip)", 46, 9, 16, 15),
+    (6, "Front Right Arrow Motor (Knee)", 3, 8, 4, 5),
+    (7, "Front Right Turning Motor (Hip)", 10, 11, 6, 7),
+]
 
 
-print("Control enabled!")
-body.set_control_status(motor=MOTOR_INDEX, status=True)  # Enable control for motor 0
-body.reset(motor=MOTOR_INDEX)  # Reset encoder position to 0
-# body.set_control_status(motor=MOTOR_INDEX, status=True)  # Enable control for motor 0
+pin_configs = [(enc_a, enc_b, in1, in2) for _, _, enc_a, enc_b, in1, in2 in MOTOR_CONFIGS]
+
+print("Initializing all motors with set_all_pins")
+body.set_all_pins(pin_configs)
+time.sleep(1)
+
+# Initialize all motors
+for motor_idx, description, enc_a, enc_b, in1, in2 in MOTOR_CONFIGS:
+    print(f"Initializing {description} (Motor {motor_idx})")
+    time.sleep(0.1)
+    response = body.session.get(f"http://{IP}:82/set_control_status?motor={motor_idx}&status=1")
+    print(f"Control Status Response: {response.text}")
+    time.sleep(0.1)
+    body.reset(motor=motor_idx)
+    time.sleep(0.1)
+
+print("All motors initialized and control enabled!")
 
 # Debounce mechanism variables
 last_key_press_time = 0
@@ -67,22 +68,21 @@ sse_thread = None
 lock = threading.Lock()
 
 # Variables for rolling window average
-angle_window = []
-encoder_window = []
+angle_window = [[] for _ in range(NUM_MOTORS)]  # List of lists for each motor
+encoder_window = [[] for _ in range(NUM_MOTORS)]
 WINDOW_SIZE = 10
 
-# Function to set angle for motor 0
-def set_angle(angle):
+# Function to set angles for all 8 motors
+def set_angles(angles):
     global last_key_press_time
     current_time = time.time()
     if current_time - last_key_press_time > debounce_interval:
         last_key_press_time = current_time
-        print(f"\nSetting motor {MOTOR_INDEX} angle to {angle} degrees")
-        # Pause SSE briefly to allow the set_angle request to go through
+        print(f"\nSetting angles: {angles}")
         with lock:
             sse_active.clear()  # Signal SSE thread to pause
             time.sleep(0.05)  # Brief pause to let SSE loop yield
-            body.set_angle(motor=MOTOR_INDEX, a=angle)  # Updated API with motor param
+            body.set_angles(angles)  # Set all 8 angles at once
             sse_active.set()  # Resume SSE
 
 # SSE processing function (updated for multi-motor JSON format)
@@ -100,25 +100,30 @@ def sse_listener():
                         break
                     if line and line.startswith(b'data: '):
                         data = json.loads(line[6:].decode('utf-8'))
-                        # Extract data for motor 0 (assuming NUM_MOTORS >= 1)
-                        angle = data["angles"][MOTOR_INDEX]
-                        encoder_pos = data["encoderPos"][MOTOR_INDEX]
                         current_time = time.time()
                         
-                        # Update rolling windows
-                        angle_window.append(angle)
-                        encoder_window.append(encoder_pos)
-                        if len(angle_window) > WINDOW_SIZE:
-                            angle_window.pop(0)
-                        if len(encoder_window) > WINDOW_SIZE:
-                            encoder_window.pop(0)
+                        # Process data for all motors
+                        output = ""
+                        for i in range(NUM_MOTORS):
+                            angle = data["angles"][i]
+                            encoder_pos = data["encoderPos"][i]
                             
-                        # Calculate averages
-                        avg_angle = sum(angle_window) / len(angle_window)
-                        avg_encoder = sum(encoder_window) / len(encoder_window)
+                            # Update rolling windows for this motor
+                            angle_window[i].append(angle)
+                            encoder_window[i].append(encoder_pos)
+                            if len(angle_window[i]) > WINDOW_SIZE:
+                                angle_window[i].pop(0)
+                            if len(encoder_window[i]) > WINDOW_SIZE:
+                                encoder_window[i].pop(0)
+                                
+                            # Calculate averages
+                            avg_angle = sum(angle_window[i]) / len(angle_window[i])
+                            avg_encoder = sum(encoder_window[i]) / len(encoder_window[i])
+                            
+                            output += f" M{i}: {avg_angle:.2f}°/{avg_encoder:.2f}"
                         
-                        # Print averages with carriage return to avoid screen clearing
-                        print(f"\rMotor {MOTOR_INDEX} - Average Angle: {avg_angle:.2f}, Average Encoder Position: {avg_encoder:.2f}", end="")
+                        # Print averages with carriage return
+                        print(f"\r{output}", end="")
                         last_time = current_time
             except Exception as e:
                 print(f"SSE error: {e}")
@@ -130,13 +135,58 @@ def sse_listener():
 sse_thread = threading.Thread(target=sse_listener, daemon=True)
 sse_thread.start()
 
+# Add global variable for motor control state
+motor_control_enabled = True
+
 # Function to handle key presses
 def on_press(key):
+    global motor_control_enabled
     try:
-        if key.char == 'a':
-            set_angle(25)
+        # Knee motors: 0, 2, 4, 6 (Arrow motors)
+        # Hip motors: 1, 3, 5, 7 (Turning motors)
+        angles = [0] * NUM_MOTORS  # Default all to 0
+        if key.char == 't':
+            motor_control_enabled = not motor_control_enabled
+            print(f"\nMotor control {'enabled' if motor_control_enabled else 'disabled'}")
+            for i in range(NUM_MOTORS):
+                if motor_control_enabled:
+                    body.reset(motor=i)
+                    time.sleep(0.5)
+                    body.set_control_status(motor=i, status=motor_control_enabled)
+                    time.sleep(0.1)
+                else:
+                    body.reset(motor=i)
+                    time.sleep(0.5)
+                    body.set_control_status(motor=i, status=motor_control_enabled)
+                    time.sleep(0.5)
+        elif key.char == 'a':
+            # Set knees and hips to opposite angles
+            angles = [0] * NUM_MOTORS  # Initialize array
+            # Left side: knees -15, hips +15
+            angles[0] = -0  # Back Left Knee
+            angles[1] = 45   # Back Left Hip (inverse)
+            angles[2] = -0  # Front Left Knee
+            angles[3] = 45   # Front Left Hip (inverse)
+            # Right side: knees +15, hips -15
+            angles[4] = -0   # Back Right Knee
+            angles[5] = -45  # Back Right Hip (inverse)
+            angles[6] = 0   # Front Right Knee
+            angles[7] = -45  # Front Right Hip (inverse)
+            set_angles(angles)
         elif key.char == 'd':
-            set_angle(-25)
+            # Set knees and hips to opposite angles
+            angles = [0] * NUM_MOTORS  # Initialize array
+            # Left side: knees +15, hips -15
+            angles[0] = 0   # Back Left Knee
+            angles[1] = -0  # Back Left Hip (inverse)
+            angles[2] = 0   # Front Left Knee
+            angles[3] = -0  # Front Left Hip (inverse)
+            # Right side: knees -15, hips +15
+            angles[4] = -0  # Back Right Knee
+            angles[5] = 0   # Back Right Hip (inverse)
+            angles[6] = -0  # Front Right Knee
+            angles[7] = 0   # Front Right Hip (inverse)
+            set_angles(angles)
     except AttributeError:
         pass  # Ignore non-character keys
 
@@ -149,9 +199,11 @@ try:
     while True:
         time.sleep(1)  # Keep main thread alive
 except KeyboardInterrupt:
-    print("Stopped by user")
+    print("\nStopped by user")
 finally:
     listener.stop()
     sse_active.clear()  # Stop SSE thread cleanly
-    body.set_control_status(motor=MOTOR_INDEX, status=False)  # Disable motor control on exit
-    print("Control disabled")
+    for i in range(NUM_MOTORS):
+        body.set_control_status(motor=i, status=False)  # Disable all motors
+        time.sleep(0.3)  # Give ESP32 time to process
+    print("Control disabled for all motors")
