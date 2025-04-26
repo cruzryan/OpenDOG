@@ -1,10 +1,9 @@
 import os
 import sys
 import time
-import json
 import threading
 from pynput import keyboard
-import requests
+import uuid
 
 # Add the code directory to sys.path
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -12,116 +11,133 @@ code_dir = os.path.dirname(script_dir)
 if code_dir not in sys.path:
     sys.path.insert(0, code_dir)
 
-from quadpilot import QuadPilotBody  # Assuming quadpilot.py contains the updated QuadPilotBody class
+from quadpilot import QuadPilotBody
 
-# Initialize with ESP32's IP address
-body = QuadPilotBody("192.168.0.198")
+# Initialize with two ESP32 IPs (192.168.137.100 for motors 0-3, 192.168.137.101 for motors 4-7)
+body = QuadPilotBody()
 
 # Motor indices
-MOTOR_0 = 0
-MOTOR_1 = 1
+NUM_MOTORS = 8
+TARGET_MOTORS = [0, 1, 4, 5]  # Back Left Knee, Back Left Knee, Back Right Knee
 
-# Set initial PID parameters (applies to both motors)
-body.set_control_params(P=0.9, I=0.001, D=0.3, dead_zone=10, pos_thresh=5)
+# Set initial PID parameters for both ESP32s
+body.set_control_params(1.5, 0.001, 0.3, 5, 5)
+# Note: If motor overshoots, try reducing kp (e.g., 0.5) or increasing kd (e.g., 0.5)
+print("Set control parameters")
 
-# Set pins and enable control for both motors
-# Motor 0
-body.set_pins(motor=MOTOR_0, ENCODER_A=8, ENCODER_B=18, IN1=12, IN2=11)
-body.set_control_status(motor=MOTOR_0, status=True)
-# Motor 1
-body.set_pins(motor=MOTOR_1, ENCODER_A=46, ENCODER_B=3, IN1=9, IN2=10)
-body.set_control_status(motor=MOTOR_1, status=True)
+# Motor configurations
+MOTOR_CONFIGS = [
+    (0, "Front Left (Hip)", 16, 15, 7, 6),
+    (1, "Front Right (Hip)", 37, 38, 2, 1),
+    (2, "Dummy Motor 2", 0, 0, 0, 0),
+    (3, "Dummy Motor 3", 0, 0, 0, 0),
+    (4, "Back Left (Hip)",  40, 39, 42, 41),
+    (5, "Back Right (Hip)", 18, 17, 4, 5),
+    (6, "Back Right Knee", 15, 16, 6, 7),
+    (7, "Dummy Motor 7", 0, 0, 0, 0),
+]
 
-# Track current target angles for each motor
-target_angles = {MOTOR_0: 0, MOTOR_1: 0}  # Start at 0 degrees for both
+pin_configs = [(enc_a, enc_b, in1, in2) for _, _, enc_a, enc_b, in1, in2 in MOTOR_CONFIGS]
+
+print("Initializing pins for all motors (only target motors will be active)")
+try:
+    body.set_all_pins(pin_configs)
+    print("Set pins successful")
+except Exception as e:
+    print(f"Failed to set pins: {e}")
+time.sleep(1)
+
+# Reset all motors
+print("Resetting all motors")
+try:
+    body.reset_all()
+    print("Reset all successful")
+except Exception as e:
+    print(f"Failed to reset all: {e}")
+
+# Initialize only the target motors
+for motor_idx in TARGET_MOTORS:
+    motor_config = MOTOR_CONFIGS[motor_idx]
+    description = motor_config[1]
+    print(f"Initializing {description} (Motor {motor_idx})")
+    try:
+        body.set_control_status(motor=motor_idx, status=True)
+        print(f"Control status set to enabled for Motor {motor_idx}")
+    except Exception as e:
+        print(f"Failed to set control status for Motor {motor_idx}: {e}")
+    time.sleep(0.5)
+
+print("Target motors initialized and control enabled!")
 
 # Debounce mechanism variables
 last_key_press_time = 0
-debounce_interval = 0.2  # seconds
+debounce_interval = 0.2
 
-# SSE handling variables
-sse_active = threading.Event()
-sse_active.set()  # Start as active
-sse_thread = None
-lock = threading.Lock()
-
-# Function to set angle for a specific motor
-def set_angle(motor, angle):
+# Function to set angle for target motors
+def set_angle(angle):
     global last_key_press_time
     current_time = time.time()
     if current_time - last_key_press_time > debounce_interval:
         last_key_press_time = current_time
-        target_angles[motor] = angle  # Update the target angle
-        print(f"Setting motor {motor} angle to {angle} degrees")
-        # Pause SSE briefly to allow the set_angle request to go through
-        with lock:
-            sse_active.clear()  # Signal SSE thread to pause
-            time.sleep(0.05)  # Brief pause to let SSE loop yield
-            body.set_angle(motor=motor, a=angle)  # Updated API with motor param
-            sse_active.set()  # Resume SSE
+        print(f"\nSetting angle for target motors: {angle}")
+        try:
+            angles = [0] * NUM_MOTORS
+            for motor_idx in TARGET_MOTORS:
+                if motor_idx < 4:
+                    angles[motor_idx] = -angle
+                else:
+                    angles[motor_idx] = angle
+            body.set_angles(angles)
+        except Exception as e:
+            print(f"Failed to set angle: {e}")
 
-# SSE processing function (updated to show both motors)
-def sse_listener():
-    url = "http://192.168.0.198:82/events"
-    while True:
-        if sse_active.is_set():
-            try:
-                session = requests.Session()
-                response = session.get(url, stream=True, timeout=5)
-                last_time = time.time()
-                for line in response.iter_lines():
-                    if not sse_active.is_set():
-                        response.close()
-                        break
-                    if line and line.startswith(b'data: '):
-                        data = json.loads(line[6:].decode('utf-8'))
-                        # Extract data for both motors
-                        angle_0 = data["angles"][MOTOR_0]
-                        encoder_pos_0 = data["encoderPos"][MOTOR_0]
-                        angle_1 = data["angles"][MOTOR_1]
-                        encoder_pos_1 = data["encoderPos"][MOTOR_1]
-                        current_time = time.time()
-                        print(f"Motor {MOTOR_0} - Angle: {angle_0:.2f}, Encoder Position: {encoder_pos_0}")
-                        print(f"Motor {MOTOR_1} - Angle: {angle_1:.2f}, Encoder Position: {encoder_pos_1}")
-                        print(f"Time since last update: {(current_time - last_time) * 1000:.2f} ms")
-                        last_time = current_time
-            except Exception as e:
-                print(f"SSE error: {e}")
-                time.sleep(1)  # Retry after a short delay
-        else:
-            time.sleep(0.01)  # Wait while paused
-
-# Start SSE in a separate thread
-sse_thread = threading.Thread(target=sse_listener, daemon=True)
-sse_thread.start()
+# Motor control state
+motor_control_enabled = True
 
 # Function to handle key presses
 def on_press(key):
+    global motor_control_enabled
     try:
-        if key.char == 'a':
-            set_angle(MOTOR_0, target_angles[MOTOR_0] + 10)  # Motor 0: +10 degrees
-        elif key.char == 'd':
-            set_angle(MOTOR_0, target_angles[MOTOR_0] - 10)  # Motor 0: -10 degrees
-        elif key.char == 'w':
-            set_angle(MOTOR_1, target_angles[MOTOR_1] + 10)  # Motor 1: +10 degrees
-        elif key.char == 's':
-            set_angle(MOTOR_1, target_angles[MOTOR_1] - 10)  # Motor 1: -10 degrees
+        if key.char == 't':
+            motor_control_enabled = not motor_control_enabled
+            print(f"\nMotor control {'enabled' if motor_control_enabled else 'disabled'}")
+            try:
+                if motor_control_enabled:
+                    body.reset_all()
+                    time.sleep(0.5)
+                    for motor_idx in TARGET_MOTORS:
+                        body.set_control_status(motor=motor_idx, status=True)
+                else:
+                    body.reset_all()
+                    time.sleep(0.5)
+                    for motor_idx in TARGET_MOTORS:
+                        body.set_control_status(motor=motor_idx, status=False)
+            except Exception as e:
+                print(f"Failed to toggle control status: {e}")
+        elif motor_control_enabled:
+            if key.char == 'a':
+                set_angle(90)
+            elif key.char == 'd':
+                set_angle(0)
     except AttributeError:
-        pass  # Ignore non-character keys
+        pass
 
 # Start the keyboard listener
 listener = keyboard.Listener(on_press=on_press)
 listener.start()
 
-# Main loop (just keep the script running)
+# Main loop
 try:
     while True:
-        time.sleep(1)  # Keep main thread alive
+        time.sleep(1)
 except KeyboardInterrupt:
-    print("Stopped by user")
+    print("\nStopped by user")
 finally:
     listener.stop()
-    sse_active.clear()  # Stop SSE thread cleanly
-    # Disable control for both motors on exit
-    body.set_control_status(motor=MOTOR_0, status=False)
-    body.set_control_status(motor=MOTOR_1, status=False)
+    try:
+        for motor_idx in TARGET_MOTORS:
+            body.set_control_status(motor=motor_idx, status=False)
+        time.sleep(0.3)
+    except Exception as e:
+        print(f"Failed to disable control: {e}")
+    print("Control disabled for target motors")

@@ -1,4 +1,5 @@
 import requests
+import threading
 
 class QuadPilotBody:
     def __init__(self, ip1="192.168.137.100", ip2="192.168.137.101"):
@@ -23,13 +24,28 @@ class QuadPilotBody:
             self.session.get(url)
 
     def set_angles(self, angles: list[int]):
-        """Set target angles in degrees for all 8 motors at once."""
+        """Set target angles in degrees for all 8 motors concurrently using threads."""
         if len(angles) != 8:
             raise ValueError("Exactly 8 angles must be provided")
+        
         params1 = "&".join(f"a{i}={angle}" for i, angle in enumerate(angles[:4]))
         params2 = "&".join(f"a{i}={angle}" for i, angle in enumerate(angles[4:]))
-        self.session.get(f"http://{self.ips[0]}:82/set_angles?{params1}")
-        self.session.get(f"http://{self.ips[1]}:82/set_angles?{params2}")
+        
+        def send_request(ip: str, params: str):
+            """Helper function to send HTTP request for a group of motors."""
+            self.session.get(f"http://{ip}:82/set_angles?{params}")
+        
+        # Create two threads, one for each group of 4 motors
+        thread1 = threading.Thread(target=send_request, args=(self.ips[0], params1))
+        thread2 = threading.Thread(target=send_request, args=(self.ips[1], params2))
+        
+        # Start both threads
+        thread1.start()
+        thread2.start()
+        
+        # Wait for both threads to complete
+        thread1.join()
+        thread2.join()
 
     def set_all_pins(self, pins: list[tuple[int, int, int, int]]):
         """Set encoder and motor pins for all 8 motors at once."""

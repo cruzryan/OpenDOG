@@ -20,7 +20,7 @@ NUM_MOTORS = 8
 TARGET_MOTOR = 0  # Back Left Turning Motor (Knee), controlled by 192.168.137.101
 
 # Set initial PID parameters for both ESP32s
-body.set_control_params(0.9, 0.001, 0.3, 5, 5)
+body.set_control_params(1.5, 0.001, 0.3, 5, 5)
 # Note: If motor overshoots, try reducing kp (e.g., 0.5) or increasing kd (e.g., 0.5)
 # body.set_control_params(0.5, 0.001, 0.5, 5, 5)
 print("Set control parameters")
@@ -28,7 +28,7 @@ print("Set control parameters")
 # Motor configurations (real config for motor 7, dummy configs for others)
 MOTOR_CONFIGS = [
     (0, "Back Left Turning Motor (Knee)", 16, 15, 7, 6),  # Real motor
-    (1, "Dummy Motor 1", 0, 0, 0, 0),  # Dummy
+    (1, "Dummy Motor 1", 37, 38, 1, 2),  # Dummy
     (2, "Dummy Motor 2", 0, 0, 0, 0),  # Dummy
     (3, "Dummy Motor 3", 0, 0, 0, 0),  # Dummy
     (4, "Dummy Motor 4", 0, 0, 0, 0),  # Dummy
@@ -42,7 +42,6 @@ MOTOR_CONFIGS = [
 ID NAME             ENCA ENCB IN1 IN2
 0 Front Left (Knee) 39, 40, 41, 42
 1 Front Right (Hip) 37, 38, 1, 2
-
 2 Front Right (Knee) 17, 18, 5, 4
 3 Front Left (Hip) 16, 15, 7, 6
 
