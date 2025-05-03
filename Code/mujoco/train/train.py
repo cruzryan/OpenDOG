@@ -65,8 +65,8 @@ if __name__ == "__main__":
 		batch_size=512,                # Tamaño de batch
 		n_epochs=10,                   # Épocas de optimización por iteración
 		gamma=0.99,                    # Factor de descuento
-		ent_coef=.001,                 # Fomenta exploración
-		clip_range=0.2,                # Clipping de políticas
+		ent_coef=.0019,                 # Fomenta exploración
+		clip_range=0.3,                # Clipping de políticas
 		max_grad_norm=0.5,             # Evita gradientes explosivos
 		tensorboard_log=tensorboard_dir     # Monitorización
 	)

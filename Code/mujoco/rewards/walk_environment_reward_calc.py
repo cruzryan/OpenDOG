@@ -31,7 +31,7 @@ class WalkEnvironmentRewardCalc:
 			"distance": .5, 
 			"healthy": .98,
 			"feet_airtime": .2,
-			"diagonal_gait_reward": .5,
+			"diagonal_gait_reward": .6,
 			"contact_force": .005,
 		}
 
@@ -102,12 +102,16 @@ class WalkEnvironmentRewardCalc:
 		self.last_action = np.zeros(8)
 		self.clip_obs_threshold = 100.0
 
+		self.time_feet_in_ground = 2000
+		self.samples_z = np.zeros((4, self.time_feet_in_ground), dtype=float)
+		self.samples_x = np.zeros((4, self.time_feet_in_ground), dtype=float)
+
 	# Last 12 values are the motor torques
 	def torque_cost(torques):
 		return np.sum(np.square(torques))
 
-	def is_healthy(self, positions, velocities):
-		state = self.get_state_vector(positions, velocities)
+	def is_healthy(self, position, velocity):
+		state = self.get_state_vector(position, velocity)
 		
 		if not np.isfinite(state).all():
 			return False
@@ -162,16 +166,16 @@ class WalkEnvironmentRewardCalc:
 			)
 
 	######### Positive Reward functions #########
-	def linear_velocity_tracking_reward(self, xyz_velocity, position_x):
+	def get_linear_velocity_tracking_reward(self, velocity, position_x):
 		if position_x > 0:
 			vel_sqr_error = np.sum(
-				np.square(self.desired_velocity[:2] - xyz_velocity)
+				np.square(self.desired_velocity[:2] - velocity)
 			)
 			return np.exp(-vel_sqr_error / self.tracking_velocity_sigma)
 		else:
 			return 0
 	
-	def angular_velocity_tracking_reward(self, angular_velocity_y):
+	def get_angular_velocity_tracking_reward(self, angular_velocity_y):
 		vel_sqr_error = np.square(self.desired_velocity[2] - angular_velocity_y)
 		return np.exp(-vel_sqr_error / self.tracking_velocity_sigma)
 		
@@ -204,8 +208,8 @@ class WalkEnvironmentRewardCalc:
 		current_state = [
 			7 in paw_index_to_contact_index,  # FR
 			4 in paw_index_to_contact_index,  # FL
-			13 in paw_index_to_contact_index,  # BR
-			10 in paw_index_to_contact_index # BL
+			13 in paw_index_to_contact_index, # BR
+			10 in paw_index_to_contact_index  # BL
 		]
 
 		expected_pattern = self.diagonal_walk_patterns[self.current_pattern_index]
@@ -215,7 +219,7 @@ class WalkEnvironmentRewardCalc:
 		matches = 0
 		for current, expected, feet in zip(current_state, expected_pattern, self.body_feet_indices):
 			contact_force = np.linalg.norm([paw_contact_force[feet][0], paw_contact_force[feet][2]])
-			if current == expected and contact_force > 4.5:
+			if current == expected and contact_force >= 3.2 <= 4.5:
 				matches += 1
 
 		pattern_matches = matches == len(self.body_feet_indices) 
