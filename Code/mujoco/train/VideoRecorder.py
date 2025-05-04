@@ -37,25 +37,25 @@ class VideoRecorderCallback(BaseCallback):
         Graba un video del entorno.
         """
         frames = []
-        if self.video_env is None: # Inicializar entorno individual SOLO si no se ha hecho aún
+        if self.video_env is None:
             print("Initializing self.video_env for recording")
             if self.env_id == "walk":
-                self.video_env = WalkEnvironmentV0(render_mode="rgb_array") # Crear entorno INDIVIDUAL con render_mode="human"
+                self.video_env = WalkEnvironmentV0(render_mode="rgb_array")
             elif self.env_id == "jump":
-                self.video_env = JumpEnvironmentV0(render_mode="rgb_array") # Crear entorno INDIVIDUAL con render_mode="human"
+                self.video_env = JumpEnvironmentV0(render_mode="rgb_array")
             else:
                 raise ValueError(f"Unknown env_id: {self.env_id}")
 
-        obs = self.video_env.reset() # Resetear el entorno INDIVIDUAL de grabación (modo humano)
-        vec_obs = self.vec_env.reset() # Resetear el VecEnv para obtener la observación inicial del VecEnv para la predicción
+        obs = self.video_env.reset()
+        vec_obs = self.vec_env.reset()
 
         print("Starting frame recording loop")
         for i in range(self.fps * self.duration):
-            action, _ = self.model.predict(vec_obs, deterministic=True) # Predecir usando la observación del VecEnv
-            vec_obs, _, done, _ = self.vec_env.step(action) # Ejecutar paso en el VecEnv para avanzar el entrenamiento
-            obs, _, _, _, _ = self.video_env.step(action[0]) # Ejecutar paso en el entorno INDIVIDUAL de grabación con la acción para UN entorno (action[0]) - IMPORTANTE: usar action[0]
-            frame = self.video_env.render() # Renderizar el entorno INDIVIDUAL en modo rgb_array (para obtener el frame)
-            if frame is None: # Comprobar si el frame es None
+            action, _ = self.model.predict(vec_obs, deterministic=True)
+            vec_obs, _, done, _ = self.vec_env.step(action)
+            obs, _, _, _, _ = self.video_env.step(action[0])
+            frame = self.video_env.render()
+            if frame is None:
                 print(f"WARNING: frame is None at step {i} during recording")
                 continue # Saltar frames None
 

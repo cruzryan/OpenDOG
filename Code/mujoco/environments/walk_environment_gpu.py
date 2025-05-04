@@ -16,13 +16,13 @@ DEFAULT_CAMERA_CONFIG = {
 	"trackbodyid": 1,
 
 	"lookat": np.array([2., 0., 1.]),
-	"distance": 20.0,
+	"distance": 12.0,
 	"azimuth": 90,
 	"elevation": -20,
 
 	"orthographic": 0
 }
-
+ 
 class WalkEnvironmentV0(MujocoEnv):
 
 	metadata = {
@@ -67,9 +67,8 @@ class WalkEnvironmentV0(MujocoEnv):
 			"x_position": self.data.qpos[0],
 			"y_position": self.data.qpos[1],
 			"distance_from_origin": np.linalg.norm(self.data.qpos[0:2], ord=2),
-			**reward_info,
 			"paw_contact_forces": self.utils.get_paw_contact_forces(self.data, self.model),
-			"patterns_matches": self.utils.diagonal_gait_reward(self.data, self.model)
+			**reward_info,
 		}
 
 		if self.render_mode == "human" and (self.data.time - self._last_render_time) > (1.0 / self.metadata["render_fps"]):
@@ -85,7 +84,7 @@ class WalkEnvironmentV0(MujocoEnv):
 		reward = max(0.0, rewards - costs)
 		
 		reward_info = {
-			"linear_vel_tracking_reward": self.utils.get_linear_velocity_tracking_reward(self.data.qvel[:2], self.data.qpos[0]),
+			"linear_vel_tracking_reward": self.utils.linear_velocity_tracking_reward(self.data.qvel[:2], self.data.qpos[0]),
 			"reward_ctrl": self.utils.torque_cost(self.data.qfrc_actuator[-8:]),
 		}
 		
@@ -94,9 +93,9 @@ class WalkEnvironmentV0(MujocoEnv):
 	
 	def _calculate_positive_rewards(self):
 		return (
-			+ self.utils.get_linear_velocity_tracking_reward(self.data.qvel[:2], self.data.qpos[0]) * self.utils.reward_weights["linear_vel_tracking"]
+			+ self.utils.linear_velocity_tracking_reward(self.data.qvel[:2], self.data.qpos[0]) * self.utils.reward_weights["linear_vel_tracking"]
 			+ self.utils.get_reward_safe_range(self.data.qpos, self.data.qvel) * self.utils.reward_weights["healthy"]
-			+ self.utils.get_angular_velocity_tracking_reward(self.data.qvel[5]) * self.utils.reward_weights["angular_vel_tracking"]
+			+ self.utils.angular_velocity_tracking_reward(self.data.qvel[5]) * self.utils.reward_weights["angular_vel_tracking"]
 			+ self.utils.diagonal_gait_reward(self.data, self.model) * self.utils.reward_weights["diagonal_gait_reward"]
 			+ self.utils.feet_air_time_reward(self.dt, self.data, self.model) * self.utils.reward_weights["feet_airtime"]
 		)
