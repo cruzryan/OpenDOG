@@ -1,10 +1,8 @@
 # This script was created following the official documentation
-# for a Ubuntu Worsktation 24
+# for a Ubuntu Worsktation 20.04
 
-apt install linux-headers-$(uname -r)
-wget https://developer.download.nvidia.com/compute/nvidia-driver/$570.144/local_installers/nvidia-driver-local-repo-ubuntu-570.144_$arch_ext.deb
-dpkg -i nvidia-driver-local-repo-ubuntu-570.144_$arch_ext.deb
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-keyring_1.1-1_all.deb
+dpkg -i cuda-keyring_1.1-1_all.deb
 apt update
-cp /var/nvidia-driver-local-repo-ubuntu-570.144/nvidia-driver-*-keyring.gpg /usr/share/keyrings/
 apt install nvidia-open
 apt install cuda-drivers
