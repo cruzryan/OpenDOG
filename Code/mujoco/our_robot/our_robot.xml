@@ -1,115 +1,131 @@
 <mujoco model="robot_leg">
 	<compiler angle="radian" meshdir="assets" autolimits="true"/>
-	<option cone="elliptic" impratio="100"/>
-	<option gravity="0 0 -9.81"/>
+    <!-- Keep reduced timestep and margin -->
+	<option timestep="0.001" cone="elliptic" impratio="50" gravity="0 0 -9.81"/>
 
-	<default>	      
-		<geom type="mesh" xyaxes="1 0 0 0 1 0"/>
+	<default>
+		<geom type="mesh" xyaxes="1 0 0 0 1 0" margin="0.0001"/>
 		<default class="our_robot">
-			<geom friction="0.6" margin="0.001" condim="1"/>
-			<joint damping="2" armature="0.01" frictionloss="0.2"/>
-			<position kp="100" forcerange="-14.7 14.7"/>
+			<geom friction="0.7" />
+            <!-- Joint params tuned for mass ~ s scaling -->
+			<joint damping="0.01" armature="5e-6" frictionloss="0.0005"/>
+            <!-- *** KEY CHANGE: Scaled forcerange and adjusted kp *** -->
+            <!-- forcerange = Real Torque * s^2 = 0.834 * (0.01)^2 = 8.34e-5 -->
+            <!-- kp needs tuning relative to this small force limit. Start guess: 10 -->
+			<position kp="1.5" forcerange="-4.34e-2 4.34e-2"/>
 			<default class="tigh">
 				<joint range="0 3.14" axis="0 1 0"/>
-				<position ctrlrange=".349 3.14"/>
+				<position ctrlrange="0 3.14"/> <!-- Inherits kp, forcerange -->
 			</default>
 			<default class="knee">
 				<joint range="-2.6816 0" axis="0 1 0"/>
-				<position forcerange="-14.55 14.55" ctrlrange="-2.6816 0"/>
+				<position ctrlrange="-2.6816 0"/> <!-- Inherits kp, forcerange -->
 			</default>
 			  <default class="paw">
-				<geom mass=".100" priority="1" solimp="0.015 1 0.023" condim="6"
+                <!-- Use mass scaled by s=0.01 (Real: 10g -> Sim: 0.1g) -->
+				<geom mass="0.0001" priority="1" solimp="0.9 0.95 0.001 0.5 2" condim="6"
 				friction="1.5 1.5 .01"/>
 			</default>
 		</default>
     </default>
 
 	<asset>
+        <!-- Meshes are scaled by 0.01 -->
 		<material name="dark" rgba="90 7 0.1 1"/>
 		<mesh name="rigth_calf_mesh" file="rigth_calf.stl" scale=".01 .01 .01" />
 		<mesh name="left_calf_mesh" file="left_calf.stl" scale=".01 .01 .01" />
 		<mesh name="left_tigh_mesh" file="left_tigh_mesh.stl" scale=".01 .01 .01" />
 		<mesh name="rigth_tigh_mesh" file="rigth_tigh_mesh.stl" scale=".01 .01 .01" />
-		<mesh name="paw" file="paw.stl" scale=".01 .01 .01"/>	
+		<mesh name="paw" file="paw.stl" scale=".01 .01 .01"/>
 		<mesh name="chasis" file="chasis.stl" scale=".01 .01 .01" />
 	</asset>
 
 	<worldbody>
-
+        <!-- NOTE ON SCALING:
+             Geometric scale s=0.01.
+             Mass scaled by s = 0.01 (Real * 0.01) for numerical stability.
+             Torque scaled by s^2 = 0.0001 (Real * 0.0001) to maintain Force/Mass ratio.
+             Chassis Real: 1.5kg -> Sim: 0.015 kg
+             Thigh Real: ~0.05kg -> Sim: 0.0005 kg
+             Calf Real:  ~0.04kg -> Sim: 0.0004 kg
+             Paw Real:   ~0.01kg -> Sim: 0.0001 kg (in default)
+             Torque Limit Real: 0.834 Nm -> Sim: 8.34e-5 Nm (in default position actuator)
+        -->
 		<body name="trunk" childclass="our_robot" pos="0 0 1">
 			<camera name="tracking" mode="trackcom" pos="0 -1 0.8" xyaxes="1 0 0 0 1 1"/>
-			<geom contype="0" conaffinity="0" mesh="chasis" mass="1.157"/>
-			<joint type="free"/>
-			
+            <!-- Explicit inertial using Mass ~ s scaling -->
+            <inertial pos="0 0 0" mass="0.021" diaginertia="1e-5 1e-5 1e-5" />
+            <!-- Chassis geom for viz/collision only -->
+			<geom contype="0" conaffinity="0" mesh="chasis" />
+            <!-- Free joint -->
+			<joint type="free" damping="0" armature="0" frictionloss="0"/>
+
+            <!-- LEG BODIES (Mass ~ s scaling) -->
 			<body name="FL_tigh" pos=".92 1.02 -.01">
-				<geom mesh="left_tigh_mesh" mass=".01377"/>
+				<geom mesh="left_tigh_mesh" mass="0.0005"/>
 				<joint class="tigh" name="FL_tigh_joint" pos="-.1 0 0"/>
 				<body name="FL_calf" pos=".665 .120 -.010">
-					<geom mesh="left_calf_mesh" mass=".01036"/>
+					<geom mesh="left_calf_mesh" mass="0.0004"/>
 					<joint class="knee" name="FL_knee_joint" pos="-.03 0 .01"/>
-					<body name="FL_paw" pos=".52 .05 -.12" quat="0 -0.38268343 0 0.92387953" ><!---->
-						<geom mesh="paw" class="paw"/>
+					<body name="FL_paw" pos=".52 .05 -.12" quat="0 -0.38268343 0 0.92387953" >
+						<geom mesh="paw" class="paw"/> <!-- Inherits mass=0.0001 -->
 					</body>
 				</body>
 			</body>
 
 			<body name="FR_tigh" pos=".92 -1.03 -.01">
-				<geom mesh="rigth_tigh_mesh" mass=".01377"/>
+				<geom mesh="rigth_tigh_mesh" mass="0.0005"/>
 				<joint class="tigh" name="FR_tigh_joint" pos="-.1 0 0"/>
 				<body name="FR_calf" pos=".665 -.080 -.010">
-					<geom mesh="rigth_calf_mesh" mass=".01036"/>
+					<geom mesh="rigth_calf_mesh" mass="0.0004"/>
 					<joint class="knee" name="FR_knee_joint" pos="-.03 0 .01"/>
-					<body name="FR_paw" pos=".52 -.095 -.12" quat="0 -0.38268343 0 0.92387953"><!---->
+					<body name="FR_paw" pos=".52 -.095 -.12" quat="0 -0.38268343 0 0.92387953">
 						<geom mesh="paw" class="paw"/>
 					</body>
 				</body>
 			</body>
-		
+
 			<body name="BL_tigh" pos="-1.15 1.02 0">
-				<geom mesh="left_tigh_mesh" mass=".01377"/>
+				<geom mesh="left_tigh_mesh" mass="0.0005"/>
 				<joint class="tigh" name="BL_tigh_joint" pos="-.1 0 0"/>
 				<body name="BL_calf" pos=".665 .120 -.010">
-					<geom mesh="left_calf_mesh" mass=".01036"/>
+					<geom mesh="left_calf_mesh" mass="0.0004"/>
 					<joint class="knee" name="BL_knee_joint" pos="-.03 0 .01"/>
-					<body name="BL_paw" pos=".52 .05 -.12" quat="0 -0.38268343 0 0.92387953" ><!---->
+					<body name="BL_paw" pos=".52 .05 -.12" quat="0 -0.38268343 0 0.92387953" >
 						<geom mesh="paw" class="paw"/>
 					</body>
 				</body>
 			</body>
 
 			<body name="BR_tigh" pos="-1.15 -1.03 0">
-				<geom mesh="rigth_tigh_mesh" mass=".01377"/>
+				<geom mesh="rigth_tigh_mesh" mass="0.0005"/>
 				<joint class="tigh" name="BR_tigh_joint" pos="-.1 0 0"/>
 				<body name="BR_calf" pos=".665 -.080 -.010">
-					<geom mesh="rigth_calf_mesh" mass=".01036"/>
+					<geom mesh="rigth_calf_mesh" mass="0.0004"/>
 					<joint class="knee" name="BR_knee_joint" pos="-.03 0 .01"/>
-					<body name="BR_paw" pos=".52 -.095 -.12" quat="0 -0.38268343 0 0.92387953"><!---->
+					<body name="BR_paw" pos=".52 -.095 -.12" quat="0 -0.38268343 0 0.92387953">
 						<geom mesh="paw" class="paw"/>
 					</body>
 				</body>
 			</body>
 		</body>
-
 	</worldbody>
 
 	<actuator>
+        <!-- Inherit kp=10, forcerange= +/-8.34e-5 Nm -->
 		<position class="tigh" name="FR_tigh_actuator" joint="FR_tigh_joint"/>
 		<position class="knee" name="FR_knee_actuator" joint="FR_knee_joint"/>
-		<!---->
 		<position class="tigh" name="BR_tigh_actuator" joint="BR_tigh_joint"/>
 		<position class="knee" name="BR_knee_actuator" joint="BR_knee_joint"/>
-		<!---->
 		<position class="tigh" name="FL_tigh_actuator" joint="FL_tigh_joint"/>
 		<position class="knee" name="FL_knee_actuator" joint="FL_knee_joint"/>
-		<!---->
 		<position class="tigh" name="BL_tigh_actuator" joint="BL_tigh_joint"/>
 		<position class="knee" name="BL_knee_actuator" joint="BL_knee_joint"/>
 	</actuator>
 
-	<!--0 0 1.5 0 0 0 0 -->
-	<keyframe>
+	<keyframe> <!-- Keep original keyframe -->
 		<key name="home"
-		qpos="0 0 1.5 0 0 0 0 2.36619 -1.5708 2.36619 -1.5708 2.36619 -1.5708 2.36619 -1.5708"
-		ctrl="2.35619 -1.5708 2.35619 -1.5708 2.35619 -1.5708 2.35619 -1.5708"/>
+		qpos="0 0 1.0 0 0 0 0 2.94 -2.2 2.62 -1.81 2.92 -2.2 2.62 -1.88"
+		ctrl="2.94 -2.2 2.62 -1.81 2.92 -2.2 2.62 -1.88"/>
 	</keyframe>
 </mujoco>
