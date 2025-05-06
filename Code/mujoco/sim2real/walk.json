@@ -1,0 +1,31 @@
+[
+  {
+    "duration": 1.0,
+    "targets_deg": {
+      "FR_tigh_actuator": 45.0,
+      "FR_knee_actuator": 45.0,
+      "BR_tigh_actuator": 45.0,
+      "BR_knee_actuator": -45.0,
+      "FL_tigh_actuator": -45.0,
+      "FL_knee_actuator": 45.0,
+      "BL_tigh_actuator": 45.0,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 1.0,
+    "targets_deg": {
+      "FR_tigh_actuator": 0.0,
+      "FR_knee_actuator": 90.0,
+      "BR_tigh_actuator": 0.0,
+      "BR_knee_actuator": -90.0,
+      "FL_tigh_actuator": -0.0,
+      "FL_knee_actuator": 90.0,
+      "BL_tigh_actuator": 0.0,
+      "BL_knee_actuator": -90.0
+    }
+  }
+
+ 
+ 
+]
