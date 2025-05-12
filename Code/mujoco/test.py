@@ -16,7 +16,7 @@ def test_model(env, motion):
 	BR_force = np.empty((0, 3))
 	BL_force = np.empty((0, 3))
 
-	for _ in range(1000):
+	for _ in range(30000):
 		action, _states = model.predict(obs, deterministic=False)
 
 		print(f"Action: {action}")
