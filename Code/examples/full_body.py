@@ -81,6 +81,24 @@ def on_press(key):
                 set_angles(angles)
             elif key.char == 'd':
                 angles = [0] * NUM_MOTORS
+                angles = [0] * NUM_MOTORS
+                # Front Left (Hip)
+                angles[3] = -45
+                # Front Left (Knee)
+                angles[0] = 25  
+                # Front Right (Hip)
+                angles[1] = 45
+                # Front Right (Knee)
+                angles[2] = 25
+                # Back Right (Hip)
+                angles[5] = 45
+                # Back Right (Knee)
+                angles[4] = -25
+                # Back Left (Hip)
+                angles[7] = 45
+                # Back Left (Knee)
+                angles[6] = -25
+                set_angles(angles)
                 set_angles(angles)
             
             # move the knees 10 degree

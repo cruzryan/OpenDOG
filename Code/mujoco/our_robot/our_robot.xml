@@ -12,7 +12,7 @@
             <!-- *** KEY CHANGE: Scaled forcerange and adjusted kp *** -->
             <!-- forcerange = Real Torque * s^2 = 0.834 * (0.01)^2 = 8.34e-5 -->
             <!-- kp needs tuning relative to this small force limit. Start guess: 10 -->
-			<position kp="1.5" forcerange="-4.34e-2 4.34e-2"/>
+			<position kp="10.5" forcerange="-4.0e-1 4.0e-1"/>
 			<default class="tigh">
 				<joint range="0 3.14" axis="0 1 0"/>
 				<position ctrlrange="0 3.14"/> <!-- Inherits kp, forcerange -->
@@ -54,7 +54,7 @@
 		<body name="trunk" childclass="our_robot" pos="0 0 1">
 			<camera name="tracking" mode="trackcom" pos="0 -1 0.8" xyaxes="1 0 0 0 1 1"/>
             <!-- Explicit inertial using Mass ~ s scaling -->
-            <inertial pos="0 0 0" mass="0.021" diaginertia="1e-5 1e-5 1e-5" />
+            <inertial pos="0 0 0" mass="0.018" diaginertia="1e-5 1e-5 1e-5" />
             <!-- Chassis geom for viz/collision only -->
 			<geom contype="0" conaffinity="0" mesh="chasis" />
             <!-- Free joint -->
@@ -125,7 +125,7 @@
 
 	<keyframe> <!-- Keep original keyframe -->
 		<key name="home"
-		qpos="0 0 1.0 0 0 0 0 2.94 -2.2 2.62 -1.81 2.92 -2.2 2.62 -1.88"
-		ctrl="2.94 -2.2 2.62 -1.81 2.92 -2.2 2.62 -1.88"/>
+		qpos="0 0 1.0 0 0 0 0 2.74 -2.2 2.62 -1.81 2.72 -2.2 2.62 -1.88"
+		ctrl="2.62 -1.9 2.62 -1.81 2.62 -1.9 2.62 -1.88"/>
 	</keyframe>
 </mujoco>

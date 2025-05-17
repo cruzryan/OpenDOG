@@ -50,17 +50,3 @@ try:
     print("Reset all successful")
 except Exception as e:
     print(f"Failed to reset all: {e}")
-
-# Initialize only the target motors
-for motor_idx in TARGET_MOTORS:
-    motor_config = MOTOR_CONFIGS[motor_idx]
-    description = motor_config[1]
-    print(f"Initializing {description} (Motor {motor_idx})")
-    try:
-        body.set_control_status(motor=motor_idx, status=True)
-        print(f"Control status set to enabled for Motor {motor_idx}")
-    except Exception as e:
-        print(f"Failed to set control status for Motor {motor_idx}: {e}")
-    time.sleep(0.5)
-
-print("Target motors initialized and control enabled!")
