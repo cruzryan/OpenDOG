@@ -24,6 +24,7 @@ packages=(
     "mujoco==3.2.3"
     "mujoco-python-viewer==0.1.4"
     "gymnasium==0.29.1"
+    "stable-baselines3[extra]"
     "stable_baselines3==2.4.0a8"
     "mujoco-mjx==3.3.0"
     "tensorboard==2.17.0"

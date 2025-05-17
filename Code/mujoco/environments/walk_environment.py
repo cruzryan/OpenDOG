@@ -11,12 +11,12 @@ Azimuth angle https://en.wikipedia.org/wiki/Azimuth
 See more in https://en.wikipedia.org/wiki/Spherical_coordinate_system
 """
 DEFAULT_CAMERA_CONFIG = {
-	"type": 1,
-	"fixedcamid": 0,
-	"trackbodyid": 1,
+	"type": 0,
+	"fixedcamid": 1,
+	"trackbodyid": 0,
 
-	"lookat": np.array([2., 0., 1.]),
-	"distance": 20.0,
+	"lookat": np.array([.07, 0., .10]),
+	"distance": .80,
 	"azimuth": 90,
 	"elevation": -20,
 

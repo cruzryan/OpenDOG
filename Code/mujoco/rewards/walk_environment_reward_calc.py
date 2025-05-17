@@ -36,7 +36,7 @@ class WalkEnvironmentRewardCalc:
 		}
 
 		self.cost_weights = {
-			"cost_distance": 3,
+			"cost_distance": 4,
 			"torque": 0.0001,
 			"vertical_vel": 2.0,
 			"xy_angular_vel": 0.05,
@@ -50,15 +50,15 @@ class WalkEnvironmentRewardCalc:
 			"diagonal_gait_cost": 0.5
 		}
 
-		# 4:FR, 7:FL, 10:BR, 13:BL
+		# 4:FL, 7:FR, 10:BL, 13:BR
 		self.diagonal_walk_patterns = [
-			[True, True, True, True],
-			[True, True, True, False],
-			[False, True, True, False],
-			[False, True, True, True],
 			[True, True, True, True],
 			[True, True, False, True],
 			[True, False, False, True],
+			[True, False, True, True],
+			[True, True, True, True],
+			[True, True, True, False],
+			[False, True, True, False],
 			[True, True, True, True],
 		]
 	
@@ -102,7 +102,10 @@ class WalkEnvironmentRewardCalc:
 		self.last_action = np.zeros(8)
 		self.clip_obs_threshold = 100.0
 
-		self.time_feet_in_ground = 2000
+		self.time_feet_in_ground = 1000
+		self.ground_force = [3, 0, 5]
+		self.z_curve = self.ground_force[2]* np.sin(np.linspace(0, np.pi, 50))
+		self.x_curve = self.ground_force[0]* np.sin(np.linspace(0, 2*np.pi, 50))
 		self.samples_z = np.zeros((4, self.time_feet_in_ground), dtype=float)
 		self.samples_x = np.zeros((4, self.time_feet_in_ground), dtype=float)
 
@@ -197,7 +200,7 @@ class WalkEnvironmentRewardCalc:
 			return 0
 
 	def get_cost_distance(self, position):
-		if position < self.max_distance_achieve:
+		if position <= self.max_distance_achieve:
 			return abs(position)
 		return 0
 
@@ -206,10 +209,10 @@ class WalkEnvironmentRewardCalc:
 		paw_contact_force = self.get_paw_contact_forces(data, model)
 
 		current_state = [
-			7 in paw_index_to_contact_index,  # FR
 			4 in paw_index_to_contact_index,  # FL
-			13 in paw_index_to_contact_index, # BR
-			10 in paw_index_to_contact_index  # BL
+			7 in paw_index_to_contact_index,  # FR
+			10 in paw_index_to_contact_index,  # BL
+			13 in paw_index_to_contact_index # BR
 		]
 
 		expected_pattern = self.diagonal_walk_patterns[self.current_pattern_index]
@@ -219,7 +222,7 @@ class WalkEnvironmentRewardCalc:
 		matches = 0
 		for current, expected, feet in zip(current_state, expected_pattern, self.body_feet_indices):
 			contact_force = np.linalg.norm([paw_contact_force[feet][0], paw_contact_force[feet][2]])
-			if current == expected and contact_force >= 3.2 <= 4.5:
+			if current == expected and contact_force >= 4.5:
 				matches += 1
 
 		pattern_matches = matches == len(self.body_feet_indices) 
