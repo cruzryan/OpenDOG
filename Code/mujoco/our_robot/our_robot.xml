@@ -8,20 +8,20 @@
 		<default class="our_robot">
 			<geom friction="0.6" margin="0.001" condim="1"/>
 			<joint armature="0.02" frictionloss="0.1"/>
-			<position kp="50" kv="1" forcerange="-0.83 0.83"/>
+			<position kp="25" kv="1" forcerange="-0.83 0.83"/>
 			
 			<default class="tigh">
-				<joint type="hinge" range="0 3.14" axis="0 1 0"/>
+				<joint type="hinge" range="2.36 3.14" axis="0 1 0"/>
 				<position ctrlrange="2.36 3.14"/>
 			</default>
 
 			<default class="knee">
-				<joint type="hinge" range="-2.6816 0" axis="0 1 0"/>
+				<joint type="hinge" range="-2.6816 -1.20" axis="0 1 0"/>
 				<position  ctrlrange="-2.6816 -1.20"/>
 			</default>
 			
 			<default class="paw">
-				<geom mass=".100" friction=".516 .141 .01"/>
+				<geom mass=".001" friction=".516 .141 .01"/>
 			</default>
 
 		</default>
@@ -111,7 +111,7 @@
 	<!--0 0 1.5 0 0 0 0 -->
 	<keyframe>
 			<key name="home"
-			qpos="0 0 .20 0 0 0 0 2.36619 -1.5708 2.36619 -1.5708 2.36619 -1.5708 2.36619 -1.5708"
+			qpos="0 0 .20 0 0 0 0 2.35619 -1.5708 2.35619 -1.5708 2.35619 -1.5708 2.35619 -1.5708"
 			ctrl="2.35619 -1.5708 2.35619 -1.5708 2.35619 -1.5708 2.35619 -1.5708"/>
 	</keyframe>
 </mujoco>

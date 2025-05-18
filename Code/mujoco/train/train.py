@@ -6,20 +6,29 @@ from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
 from stable_baselines3.common.env_util import make_vec_env
 from environments.walk_environment import WalkEnvironmentV0
 from environments.jump_environment import JumpEnvironmentV0
+from environments.ScaleActionEnvironment import ScaleActionWrapper
 from .VideoRecorder import VideoRecorderCallback
 import os
 
-
 def create_vec_env(env_id, n_envs, seed=None):
-	env_class = WalkEnvironmentV0 if env_id == "walk" else JumpEnvironmentV0
-	vec_env = make_vec_env(
-		env_class,
-		env_kwargs={"render_mode": "rgb_array"},
-		n_envs=n_envs,
-		seed=seed,
-		vec_env_cls=SubprocVecEnv
-	)
-	return vec_env
+    # Define the base environment class
+    base_env_class = WalkEnvironmentV0 if env_id == "walk" else JumpEnvironmentV0
+    
+    # Define a function to create and wrap a single environment instance
+    def make_wrapped_env(**kwargs):
+        env = base_env_class(**kwargs)
+        env = ScaleActionWrapper(env)  # Wrap the instance, not the class
+        return env
+    
+    # Create vectorized environments
+    vec_env = make_vec_env(
+        make_wrapped_env,  # Pass the instance-creating function
+        env_kwargs={"render_mode": "human"},
+        n_envs=n_envs,
+        seed=seed,
+        vec_env_cls=DummyVecEnv
+    )
+    return vec_env
 
 if __name__ == "__main__":
 	# Argumentos del script
@@ -65,8 +74,8 @@ if __name__ == "__main__":
 		batch_size=512,                # Tamaño de batch
 		n_epochs=10,                   # Épocas de optimización por iteración
 		gamma=0.99,                    # Factor de descuento
-		ent_coef=.0019,                 # Fomenta exploración
-		clip_range=0.3,                # Clipping de políticas
+		ent_coef=0.01,                    # Fomenta exploración
+		clip_range=0.2,                # Clipping de políticas
 		max_grad_norm=0.5,             # Evita gradientes explosivos
 		tensorboard_log=tensorboard_dir     # Monitorización
 	)

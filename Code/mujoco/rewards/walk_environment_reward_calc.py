@@ -70,8 +70,8 @@ class WalkEnvironmentRewardCalc:
 
 		self.gravity_vector = np.array(gravity)
 		self.default_joint_position = np.array(default_joint_position)
-		self.desired_velocity_min = np.array([0.8, -0.0, -0.0])
-		self.desired_velocity_max = np.array([4, 0.0, 0.0])
+		self.desired_velocity_min = np.array([1.2, -0.0, -0.0])
+		self.desired_velocity_max = np.array([2, 0.0, 0.0])
 		self.desired_velocity = self.sample_desired_vel()
 		self.obs_scale = {
 			"linear_velocity": 2.0,
@@ -84,9 +84,9 @@ class WalkEnvironmentRewardCalc:
 		
 		#Control deviation of a rect line
 		self.z_range = (1.30, 1.65)
-		self.yaw_range = np.deg2rad(20)
-		self.pitch_range = np.deg2rad(20)
-		self.roll_range = np.deg2rad(20)
+		self.yaw_range = np.deg2rad(10)
+		self.pitch_range = np.deg2rad(10)
+		self.roll_range = np.deg2rad(10)
 
 		self.feet_air_time = np.zeros(4)
 		self.last_contacts = np.zeros(4)
@@ -104,6 +104,7 @@ class WalkEnvironmentRewardCalc:
 
 		self.time_feet_in_ground = 1000
 		self.ground_force = [3, 0, 5]
+		self.time_in_pattern = 0
 		self.z_curve = self.ground_force[2]* np.sin(np.linspace(0, np.pi, 50))
 		self.x_curve = self.ground_force[0]* np.sin(np.linspace(0, 2*np.pi, 50))
 		self.samples_z = np.zeros((4, self.time_feet_in_ground), dtype=float)
@@ -216,22 +217,26 @@ class WalkEnvironmentRewardCalc:
 		]
 
 		expected_pattern = self.diagonal_walk_patterns[self.current_pattern_index]
+		next_expected_pattern = self.diagonal_walk_patterns[self.current_pattern_index + 1]
 
 		reward = 0
 		contact_force = 0
 		matches = 0
-		for current, expected, feet in zip(current_state, expected_pattern, self.body_feet_indices):
+		self.time_in_pattern += 1
+		for current, expected, next_expected_pattern, feet in zip(current_state, expected_pattern, next_expected_pattern,self.body_feet_indices):
 			contact_force = np.linalg.norm([paw_contact_force[feet][0], paw_contact_force[feet][2]])
-			if current == expected and contact_force >= 4.5:
+			if current == expected and contact_force >= 4.8 and self.time_in_pattern > 500:
 				matches += 1
 
 		pattern_matches = matches == len(self.body_feet_indices) 
 
 		if pattern_matches:
+			self.time_in_pattern = 0
 			self.consecutive_matches += 1
 			reward += self.consecutive_matches
 			self.current_pattern_index = (self.current_pattern_index + 1) % len(self.diagonal_walk_patterns)
 		else:
+			self.time_in_pattern = 0
 			reward = 0
 			self.consecutive_matches = 0
 			self.current_pattern_index = 0

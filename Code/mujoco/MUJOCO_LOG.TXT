@@ -1,6 +1,0 @@
-Sat May 17 08:22:49 2025
-ERROR: mjv_updateCamera: fixed camera id is outside valid range
-
-Sat May 17 08:24:20 2025
-ERROR: mjv_updateCamera: unknown camera type
-
