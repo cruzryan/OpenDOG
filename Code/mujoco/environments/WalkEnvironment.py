@@ -54,7 +54,6 @@ class WalkEnvironmentV0(MujocoEnv):
 		self._debug = False  
 
 	def step(self, action):
-		print("Action", action)
 		self._step += 1
 		self.do_simulation(action, self.frame_skip)
 		observation = self._get_obs()
@@ -107,6 +106,7 @@ class WalkEnvironmentV0(MujocoEnv):
 		return (
 			+ self.utils.get_cost_distance(self.data.qpos[0]) * self.utils.cost_weights["cost_distance"]
 			+ self.utils.vertical_velocity_cost(self.data.qvel[2]) * self.utils.cost_weights["vertical_vel"]
+			+ self.utils.non_flat_base_cost(self.data.qpos[3:7]) * self.utils.cost_weights["orientation"]
 		)
 
 	def _debug_rewards_costs(self, rewards, costs):

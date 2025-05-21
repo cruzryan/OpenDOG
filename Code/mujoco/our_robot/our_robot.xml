@@ -31,22 +31,22 @@
 		<material name="dark" rgba="90 7 0.1 1"/>
 		<mesh name="rigth_calf_mesh" file="rigth_calf.stl" scale=".0008 .0008 .0008" />
 		<mesh name="left_calf_mesh" file="left_calf.stl" scale=".0008 .0008 .0008" />
-		<mesh name="left_tigh_mesh" file="left_tigh_mesh.stl" scale=".0008 .0008 .0008" />
-		<mesh name="rigth_tigh_mesh" file="rigth_tigh_mesh.stl" scale=".0008 .0008 .0008" />
+		<mesh name="left_tigh" file="left_tigh.stl" scale=".0008 .0008 .0008" />
+		<mesh name="right_tigh" file="right_tigh.stl" scale=".0008 .0008 .0008" />
 		<mesh name="paw" file="paw.stl" scale=".0008 .0008 .0008"/>   
 		<mesh name="chasis" file="chasis.stl" scale=".0008 .0008 .0008" />
 	</asset>
 
 	<worldbody>
-		<body name="trunk" childclass="our_robot" pos="0 0 1">
+		<body name="trunk" childclass="our_robot" pos="0 0 .25">
 				<camera name="tracking" mode="trackcom" pos="0 -1 0.8" xyaxes="1 0 0 0 1 1"/>
 				<geom contype="0" conaffinity="0" mesh="chasis" mass="1.858"/>
-				<joint type="free"/>
-				
-				<body name="FL_tigh" pos="7.36e-02 8.16e-02 -8.00e-04">
-						<geom mesh="left_tigh_mesh" mass=".01377"/>
-						<joint class="tigh" name="FL_tigh_joint" pos="-8.00e-03 0.00e+00 0.00e+00"/>
-						<body name="FL_calf" pos="5.32e-02 9.60e-03 -8.00e-04">
+				<joint type="free" />
+
+				<body name="FL_tigh" pos="7.05e-02 8.16e-02 -13.00e-04">
+						<geom mesh="left_tigh" mass=".01377"/>
+						<joint class="tigh" name="FL_tigh_joint" pos="-5.00e-03 0.00e+00 0.00e-04"/>
+						<body name="FL_calf" pos="3.76e-02 9.60e-03 -0.80e-03">
 								<geom mesh="left_calf_mesh" mass=".01036"/>
 								<joint class="knee" name="FL_knee_joint" pos="-2.40e-03 0.00e+00 8.00e-04"/>
 								<body name="FL_paw" pos="4.16e-02 4.00e-03 -9.60e-03" quat="0 -0.38268343 0 0.92387953">
@@ -55,10 +55,10 @@
 						</body>
 				</body>
 
-				<body name="FR_tigh" pos="7.36e-02 -8.24e-02 -8.00e-04">
-						<geom mesh="rigth_tigh_mesh" mass=".01377"/>
-						<joint class="tigh" name="FR_tigh_joint" pos="-8.00e-03 0.00e+00 0.00e+00"/>
-						<body name="FR_calf" pos="5.32e-02 -6.40e-03 -8.00e-04">
+				<body name="FR_tigh" pos="7.05e-02 -7.90e-02 -13.00e-04">
+						<geom mesh="right_tigh" mass=".01377"/>
+						<joint class="tigh" name="FR_tigh_joint" pos="-5.00e-03 0.00e+00 0.00e-04"/>
+						<body name="FR_calf" pos="3.76e-02 -9.90e-03 -0.80e-03">
 								<geom mesh="rigth_calf_mesh" mass=".01036"/>
 								<joint class="knee" name="FR_knee_joint" pos="-2.40e-03 0.00e+00 8.00e-04"/>
 								<body name="FR_paw" pos="4.16e-02 -7.60e-03 -9.60e-03" quat="0 -0.38268343 0 0.92387953">
@@ -67,10 +67,10 @@
 						</body>
 				</body>
 		
-				<body name="BL_tigh" pos="-9.20e-02 8.16e-02 0.00e+00">
-						<geom mesh="left_tigh_mesh" mass=".01377"/>
-						<joint class="tigh" name="BL_tigh_joint" pos="-8.00e-03 0.00e+00 0.00e+00"/>
-						<body name="BL_calf" pos="5.32e-02 9.60e-03 -8.00e-04">
+				<body name="BL_tigh" pos="-9.45e-02 8.16e-02 5.00e-04">
+						<geom mesh="left_tigh" mass=".01377"/>
+						<joint class="tigh" name="BL_tigh_joint" pos="-5.00e-03 0.00e+00 0.00e-04"/>
+						<body name="BL_calf" pos="3.76e-02 9.60e-03 -0.80e-03">
 								<geom mesh="left_calf_mesh" mass=".01036"/>
 								<joint class="knee" name="BL_knee_joint" pos="-2.40e-03 0.00e+00 8.00e-04"/>
 								<body name="BL_paw" pos="4.16e-02 -7.60e-03 -9.60e-03" quat="0 -0.38268343 0 0.92387953">
@@ -79,10 +79,10 @@
 						</body>
 				</body>
 
-				<body name="BR_tigh" pos="-9.20e-02 -8.24e-02 0.00e+00">
-						<geom mesh="rigth_tigh_mesh" mass=".01377"/>
-						<joint class="tigh" name="BR_tigh_joint" pos="-8.00e-03 0.00e+00 0.00e+00"/>
-						<body name="BR_calf" pos="5.32e-02 9.60e-03 -8.00e-04">
+				<body name="BR_tigh" pos="-9.45e-02 -7.90e-02 5.00e-04">
+						<geom mesh="right_tigh" mass=".01377"/>
+						<joint class="tigh" name="BR_tigh_joint" pos="-5.00e-03 0.00e+00 0.00e-04"/>
+						<body name="BR_calf" pos="3.76e-02 -9.90e-03 -0.80e-03">
 								<geom mesh="rigth_calf_mesh" mass=".01036"/>
 								<joint class="knee" name="BR_knee_joint" pos="-2.40e-03 0.00e+00 8.00e-04"/>
 								<body name="BR_paw" pos="4.16e-02 -7.60e-03 -9.60e-03" quat="0 -0.38268343 0 0.92387953">
@@ -108,7 +108,7 @@
 			<position class="knee" name="BL_knee_actuator" joint="BL_knee_joint"/>
 	</actuator>
 
-	<!--0 0 1.5 0 0 0 0 -->
+	<!-- 0 0 .20 0 0 0 0 -->
 	<keyframe>
 			<key name="home"
 			qpos="0 0 .20 0 0 0 0 2.35619 -1.5708 2.35619 -1.5708 2.35619 -1.5708 2.35619 -1.5708"

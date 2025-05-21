@@ -84,9 +84,9 @@ class WalkEnvironmentRewardCalc:
 		
 		#Control deviation of a rect line
 		self.z_range = (1.30, 1.65)
-		self.yaw_range = np.deg2rad(10)
-		self.pitch_range = np.deg2rad(10)
-		self.roll_range = np.deg2rad(10)
+		self.yaw_range = np.deg2rad(5)
+		self.pitch_range = np.deg2rad(5)
+		self.roll_range = np.deg2rad(5)
 
 		self.feet_air_time = np.zeros(4)
 		self.last_contacts = np.zeros(4)

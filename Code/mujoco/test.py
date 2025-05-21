@@ -1,9 +1,12 @@
-from stable_baselines3 import PPO
-from environments.walk_environment import WalkEnvironmentV0
-from environments.jump_environment import JumpEnvironmentV0
-from argparse import ArgumentParser
 import numpy as np
 import matplotlib.pyplot as plt
+from argparse import ArgumentParser
+
+from stable_baselines3 import PPO
+
+from environments.ScaleActionEnvironment import ScaleActionWrapper
+from environments.WalkEnvironment import WalkEnvironmentV0
+from environments.JumpEnvironment import JumpEnvironmentV0
 
 def test_model(env, motion):
 	# Cargar el modelo correspondiente al tipo de movimiento
@@ -63,5 +66,6 @@ if __name__ == "__main__":
 	elif args.motion == "jump":
 		env = JumpEnvironmentV0(render_mode="human")
 
+	wrapped = ScaleActionWrapper(env)
 	# Llamar a la función de prueba con el entorno y tipo de movimiento especificado
-	test_model(env, args.motion)
+	test_model(wrapped, args.motion)
