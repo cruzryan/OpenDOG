@@ -311,37 +311,40 @@ def on_press(key):
                 # Front Left (Hip)
                 angles[3] = -45
                 # Front Left (Knee)
-                angles[0] = 25  
+                angles[0] = 45  
                 # Front Right (Hip)
                 angles[1] = 45
                 # Front Right (Knee)
-                angles[2] = 25
+                angles[2] = 45
                 # Back Right (Hip)
                 angles[5] = 45
                 # Back Right (Knee)
-                angles[4] = -25
+                angles[4] = -45
                 # Back Left (Hip)
                 angles[7] = 45
                 # Back Left (Knee)
-                angles[6] = -25
+                angles[6] = -45
                 set_angles(angles)
             
             # Move the knees 10 degrees
             elif key.char == 'w':
-                # Phase 1: Lift Front Left and Back Right legs, swing them forward
                 angles = [0] * NUM_MOTORS
-                # Front Left: Lift and swing forward
-                angles[3] = -60  # Hip swings forward more
-                angles[0] = 60   # Knee lifts higher
-                # Front Right: Stays on ground (support)
+                # Front Left (Hip)
+                angles[3] = -45
+                # Front Left (Knee)
+                angles[0] = 45  
+                # Front Right (Hip)
                 angles[1] = 45
-                angles[2] = 45
-                # Back Right: Lift and swing forward
-                angles[5] = 60   # Hip swings forward
-                angles[4] = -60  # Knee lifts
-                # Back Left: Stays on ground (support)
+                # Front Right (Knee)
+                angles[2] = 20
+                # Back Right (Hip)
+                angles[5] = 45
+                # Back Right (Knee)
+                angles[4] = -45
+                # Back Left (Hip)
                 angles[7] = 45
-                angles[6] = -45
+                # Back Left (Knee)
+                angles[6] = -20
                 set_angles(angles)
             elif key.char == 's':
                 # Phase 2: Lift Front Right and Back Left legs, swing them forward

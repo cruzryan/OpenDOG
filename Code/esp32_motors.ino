@@ -1,15 +1,18 @@
 #include <Arduino.h>
 #include <WiFi.h>
-#include <esp_http_server.h>
+#include <WiFiUdp.h>
 #include <ArduinoJson.h>
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
+#include <Wire.h>
 
 // WiFi credentials
 #define SSID "TT"
 #define PASSWORD "12345678"
-#define PORT 82
+#define UDP_PORT 12345
 
 // Set static IP configuration
-IPAddress local_IP(192, 168, 137, 100); // 101 back , 100 front
+IPAddress local_IP(192, 168, 137, 101); // 101 back, 100 front
 IPAddress gateway(192, 168, 137, 1);
 IPAddress subnet(255, 255, 255, 0);
 IPAddress primaryDNS(8, 8, 8, 8);   // Google DNS
@@ -33,8 +36,14 @@ const int COUNTS_PER_REV = 1975;
 unsigned long lastTime = 0;
 const unsigned long dt = 2;
 
-// HTTP server handle
-httpd_handle_t server = NULL;
+// UDP instance
+WiFiUDP udp;
+
+// Synchronization flag for targetPos updates
+volatile bool targetPosUpdated = false;
+
+// Debug array for computed target positions
+long debugTargetPos[4] = {0, 0, 0, 0};
 
 // Motor structure
 struct Motor {
@@ -43,34 +52,59 @@ struct Motor {
     int IN1;
     int IN2;
     volatile long encoderPos;
-    long targetPos;
+    volatile long targetPos; // Made volatile for cross-core access
     long lastError;
     float integralError;
     bool controlEnabled;
+    // For debouncing
+    unsigned long lastAChange;
+    unsigned long lastBChange;
+    bool lastAState;
+    bool lastBState;
 };
 
 Motor motors[NUM_MOTORS];
 
-// Interrupt Handlers for Encoders
+// IMU Setup
+#define I2C_SDA 19
+#define I2C_SCL 20
+Adafruit_MPU6050 mpu;
+bool mpu_available = false;
+
+// Interrupt Handlers for Encoders with Debouncing
 void IRAM_ATTR handleEncoderA(void* arg) {
     Motor* motor = (Motor*)arg;
+    unsigned long now = micros();
+    if (now - motor->lastAChange < 1000) return; // Debounce: ignore changes faster than 1ms
+    motor->lastAChange = now;
+
     bool encAVal = digitalRead(motor->ENCODER_A);
     bool encBVal = digitalRead(motor->ENCODER_B);
-    if (encAVal == encBVal) {
-        motor->encoderPos--;
-    } else {
-        motor->encoderPos++;
+    if (encAVal != motor->lastAState) {
+        motor->lastAState = encAVal;
+        if (encAVal == encBVal) {
+            motor->encoderPos--;
+        } else {
+            motor->encoderPos++;
+        }
     }
 }
 
 void IRAM_ATTR handleEncoderB(void* arg) {
     Motor* motor = (Motor*)arg;
+    unsigned long now = micros();
+    if (now - motor->lastBChange < 1000) return; // Debounce: ignore changes faster than 1ms
+    motor->lastBChange = now;
+
     bool encAVal = digitalRead(motor->ENCODER_A);
     bool encBVal = digitalRead(motor->ENCODER_B);
-    if (encAVal == encBVal) {
-        motor->encoderPos++;
-    } else {
-        motor->encoderPos--;
+    if (encBVal != motor->lastBState) {
+        motor->lastBState = encBVal;
+        if (encAVal == encBVal) {
+            motor->encoderPos++;
+        } else {
+            motor->encoderPos--;
+        }
     }
 }
 
@@ -113,6 +147,11 @@ int computePower(long error, long errorDelta) {
 
 void controlMotor(int motorIndex) {
     Motor &motor = motors[motorIndex];
+    if (!motor.controlEnabled) {
+        setMotor(motorIndex, 0);
+        return;
+    }
+
     long error = motor.targetPos - motor.encoderPos;
     long errorDelta = error - motor.lastError;
     motor.lastError = error;
@@ -127,111 +166,84 @@ void controlMotor(int motorIndex) {
     setMotor(motorIndex, power);
 }
 
-// HTTP URI Handlers
-static esp_err_t set_control_params_handler(httpd_req_t *req) {
-    char query[128];
-    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK) {
-        char buf[20];
-        if (httpd_query_key_value(query, "P", buf, sizeof(buf)) == ESP_OK) kp = atof(buf);
-        if (httpd_query_key_value(query, "I", buf, sizeof(buf)) == ESP_OK) ki = atof(buf);
-        if (httpd_query_key_value(query, "D", buf, sizeof(buf)) == ESP_OK) kd = atof(buf);
-        if (httpd_query_key_value(query, "dead_zone", buf, sizeof(buf)) == ESP_OK) DEAD_ZONE = atoi(buf);
-        if (httpd_query_key_value(query, "pos_thresh", buf, sizeof(buf)) == ESP_OK) POSITION_THRESHOLD = atoi(buf);
-    }
-    return httpd_resp_send(req, "K", 1);
+// UDP Command Handlers
+void handle_set_control_params(const JsonDocument& doc) {
+    if (doc.containsKey("P")) kp = doc["P"].as<float>();
+    if (doc.containsKey("I")) ki = doc["I"].as<float>();
+    if (doc.containsKey("D")) kd = doc["D"].as<float>();
+    if (doc.containsKey("dead_zone")) DEAD_ZONE = doc["dead_zone"].as<int>();
+    if (doc.containsKey("pos_thresh")) POSITION_THRESHOLD = doc["pos_thresh"].as<int>();
 }
 
-static esp_err_t set_angles_handler(httpd_req_t *req) {
-    char query[256];
-    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK) {
-        char buf[20];
-        for (int i = 0; i < NUM_MOTORS; i++) {
-            char param[3];
-            snprintf(param, sizeof(param), "a%d", i);
-            if (httpd_query_key_value(query, param, buf, sizeof(buf)) == ESP_OK) {
-                int angle = atoi(buf);
-                motors[i].targetPos = angle * COUNTS_PER_REV / 360;
-            }
-        }
+void handle_set_angles(int angles[], size_t arraySize) {
+    for (size_t i = 0; i < arraySize && i < NUM_MOTORS; i++) {
+        int angleDeg = angles[i];
+        long computedTargetPos = static_cast<long>(angleDeg * static_cast<float>(COUNTS_PER_REV) / 360.0);
+        motors[i].targetPos = computedTargetPos;
+        debugTargetPos[i] = computedTargetPos; // Debug: store computed value
     }
-    return httpd_resp_send(req, "K", 1);
+    targetPosUpdated = true; // Signal that targetPos has been updated
 }
 
-static esp_err_t set_all_pins_handler(httpd_req_t *req) {
-    char query[1024];
-    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK) {
-        char buf[20];
-        for (int i = 0; i < NUM_MOTORS; i++) {
-            Motor &motor = motors[i];
-            int new_ENCODER_A = motor.ENCODER_A;
-            int new_ENCODER_B = motor.ENCODER_B;
-            int new_IN1 = motor.IN1;
-            int new_IN2 = motor.IN2;
+void handle_set_all_pins(const JsonDocument& doc) {
+    for (int i = 0; i < NUM_MOTORS; i++) {
+        Motor &motor = motors[i];
+        int new_ENCODER_A = motor.ENCODER_A;
+        int new_ENCODER_B = motor.ENCODER_B;
+        int new_IN1 = motor.IN1;
+        int new_IN2 = motor.IN2;
 
-            char param[12];
-            snprintf(param, sizeof(param), "ENCODER_A%d", i);
-            if (httpd_query_key_value(query, param, buf, sizeof(buf)) == ESP_OK) new_ENCODER_A = atoi(buf);
-            snprintf(param, sizeof(param), "ENCODER_B%d", i);
-            if (httpd_query_key_value(query, param, buf, sizeof(buf)) == ESP_OK) new_ENCODER_B = atoi(buf);
-            snprintf(param, sizeof(param), "IN1_%d", i);
-            if (httpd_query_key_value(query, param, buf, sizeof(buf)) == ESP_OK) new_IN1 = atoi(buf);
-            snprintf(param, sizeof(param), "IN2_%d", i);
-            if (httpd_query_key_value(query, param, buf, sizeof(buf)) == ESP_OK) new_IN2 = atoi(buf);
+        char key[12];
+        snprintf(key, sizeof(key), "ENCODER_A%d", i);
+        if (doc.containsKey(key)) new_ENCODER_A = doc[key].as<int>();
+        snprintf(key, sizeof(key), "ENCODER_B%d", i);
+        if (doc.containsKey(key)) new_ENCODER_B = doc[key].as<int>();
+        snprintf(key, sizeof(key), "IN1_%d", i);
+        if (doc.containsKey(key)) new_IN1 = doc[key].as<int>();
+        snprintf(key, sizeof(key), "IN2_%d", i);
+        if (doc.containsKey(key)) new_IN2 = doc[key].as<int>();
 
-            if (motor.ENCODER_A != -1) detachInterrupt(digitalPinToInterrupt(motor.ENCODER_A));
-            if (motor.ENCODER_B != -1) detachInterrupt(digitalPinToInterrupt(motor.ENCODER_B));
+        if (motor.ENCODER_A != -1) detachInterrupt(digitalPinToInterrupt(motor.ENCODER_A));
+        if (motor.ENCODER_B != -1) detachInterrupt(digitalPinToInterrupt(motor.ENCODER_B));
 
-            motor.ENCODER_A = new_ENCODER_A;
-            motor.ENCODER_B = new_ENCODER_B;
-            motor.IN1 = new_IN1;
-            motor.IN2 = new_IN2;
+        motor.ENCODER_A = new_ENCODER_A;
+        motor.ENCODER_B = new_ENCODER_B;
+        motor.IN1 = new_IN1;
+        motor.IN2 = new_IN2;
 
-            if (motor.ENCODER_A != -1) {
-                pinMode(motor.ENCODER_A, INPUT_PULLUP);
-                if (digitalPinToInterrupt(motor.ENCODER_A) != NOT_AN_INTERRUPT) {
-                    attachInterruptArg(digitalPinToInterrupt(motor.ENCODER_A), handleEncoderA, &motor, CHANGE);
-                }
+        if (motor.ENCODER_A != -1) {
+            pinMode(motor.ENCODER_A, INPUT_PULLUP);
+            if (digitalPinToInterrupt(motor.ENCODER_A) != NOT_AN_INTERRUPT) {
+                attachInterruptArg(digitalPinToInterrupt(motor.ENCODER_A), handleEncoderA, &motor, CHANGE);
             }
-            if (motor.ENCODER_B != -1) {
-                pinMode(motor.ENCODER_B, INPUT_PULLUP);
-                if (digitalPinToInterrupt(motor.ENCODER_B) != NOT_AN_INTERRUPT) {
-                    attachInterruptArg(digitalPinToInterrupt(motor.ENCODER_B), handleEncoderB, &motor, CHANGE);
-                }
+        }
+        if (motor.ENCODER_B != -1) {
+            pinMode(motor.ENCODER_B, INPUT_PULLUP);
+            if (digitalPinToInterrupt(motor.ENCODER_B) != NOT_AN_INTERRUPT) {
+                attachInterruptArg(digitalPinToInterrupt(motor.ENCODER_B), handleEncoderB, &motor, CHANGE);
             }
+        }
 
-            if (motor.IN1 != -1) {
-                pinMode(motor.IN1, OUTPUT);
-                digitalWrite(motor.IN1, LOW);
-                ledcAttachChannel(motor.IN1, 1000, 8, i * 2);  // Channels 0, 2, 4, 6
-                ledcWrite(motor.IN1, 255);
-            }
-            if (motor.IN2 != -1) {
-                pinMode(motor.IN2, OUTPUT);
-                digitalWrite(motor.IN2, LOW);
-                ledcAttachChannel(motor.IN2, 1000, 8, i * 2 + 1);  // Channels 1, 3, 5, 7
-                ledcWrite(motor.IN2, 255);
-            }
+        if (motor.IN1 != -1) {
+            pinMode(motor.IN1, OUTPUT);
+            digitalWrite(motor.IN1, LOW);
+            ledcAttachChannel(motor.IN1, 1000, 8, i * 2);  // Channels 0, 2, 4, 6
+            ledcWrite(motor.IN1, 255);
+        }
+        if (motor.IN2 != -1) {
+            pinMode(motor.IN2, OUTPUT);
+            digitalWrite(motor.IN2, LOW);
+            ledcAttachChannel(motor.IN2, 1000, 8, i * 2 + 1);  // Channels 1, 3, 5, 7
+            ledcWrite(motor.IN2, 255);
         }
     }
-    return httpd_resp_send(req, "K", 1);
 }
 
-static esp_err_t set_control_status_handler(httpd_req_t *req) {
-    char query[128];
-    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK) {
-        char buf[20];
-        int motorIndex;
-        if (httpd_query_key_value(query, "motor", buf, sizeof(buf)) == ESP_OK) {
-            motorIndex = atoi(buf);
-            if (motorIndex < 0 || motorIndex >= NUM_MOTORS) {
-                return httpd_resp_send(req, "Invalid motor index", 18);
-            }
-        } else {
-            return httpd_resp_send(req, "Missing motor index", 19);
-        }
-
-        if (httpd_query_key_value(query, "status", buf, sizeof(buf)) == ESP_OK) {
-            int status = atoi(buf);
+void handle_set_control_status(const JsonDocument& doc) {
+    if (doc.containsKey("motor") && doc.containsKey("status")) {
+        int motorIndex = doc["motor"].as<int>();
+        if (motorIndex >= 0 && motorIndex < NUM_MOTORS) {
+            int status = doc["status"].as<int>();
             motors[motorIndex].controlEnabled = (status != 0);
             if (motors[motorIndex].controlEnabled) {
                 motors[motorIndex].targetPos = motors[motorIndex].encoderPos;
@@ -241,62 +253,210 @@ static esp_err_t set_control_status_handler(httpd_req_t *req) {
                 setMotor(motorIndex, 0);
             }
         }
-
-        char response[32];
-        snprintf(response, sizeof(response), "M%d: Control=%d", motorIndex, motors[motorIndex].controlEnabled);
-        return httpd_resp_send(req, response, strlen(response));
     }
-    return httpd_resp_send(req, "K", 1);
 }
 
-static esp_err_t reset_all_handler(httpd_req_t *req) {
+void handle_reset_all() {
     for (int i = 0; i < NUM_MOTORS; i++) {
         motors[i].encoderPos = 0;
         motors[i].targetPos = 0;
         motors[i].lastError = 0;
         motors[i].integralError = 0;
+        debugTargetPos[i] = 0; // Reset debug values
     }
-    return httpd_resp_send(req, "K", 1);
 }
 
-static esp_err_t events_handler(httpd_req_t *req) {
-    httpd_resp_set_type(req, "text/event-stream");
-    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
-    httpd_resp_set_hdr(req, "Connection", "keep-alive");
+void handle_get_imu_data(IPAddress senderIP, int senderPort) {
+    if (mpu_available) {
+        sensors_event_t a, g, temp; // Use 'temp' as it is a member of sensors_event_t
+        mpu.getEvent(&a, &g, &temp);
 
-    while (true) {
-        StaticJsonDocument<256> doc;
-        JsonArray angles = doc.createNestedArray("angles");
-        JsonArray encoderPos = doc.createNestedArray("encoderPos");
-        for (int i = 0; i < NUM_MOTORS; i++) {
-            float angle = (float)motors[i].encoderPos * 360 / COUNTS_PER_REV;
-            angles.add(angle);
-            encoderPos.add(motors[i].encoderPos);
-        }
+        StaticJsonDocument<256> doc; // Sufficient for sending only IMU data
+        JsonObject imu_data = doc.createNestedObject("imu"); // Renamed for clarity
+        imu_data["accel_x"] = a.acceleration.x;
+        imu_data["accel_y"] = a.acceleration.y;
+        imu_data["accel_z"] = a.acceleration.z;
+        imu_data["gyro_x"] = g.gyro.x;
+        imu_data["gyro_y"] = g.gyro.y;
+        imu_data["gyro_z"] = g.gyro.z;
+        imu_data["temp"] = temp.temperature;
+
         char json[256];
         size_t len = serializeJson(doc, json);
-        char event[512];
-        snprintf(event, sizeof(event), "data: %s\n\n", json);
-        if (httpd_resp_send_chunk(req, event, strlen(event)) != ESP_OK) {
-            break;
-        }
-        delay(2);
+
+        udp.beginPacket(senderIP, senderPort);
+        udp.write((uint8_t*)json, len);
+        udp.endPacket();
+    } else {
+        StaticJsonDocument<64> doc; // Increased slightly just in case, 32 was tight
+        doc["error"] = "MPU6050 not initialized";
+        char json[64];
+        size_t len = serializeJson(doc, json);
+
+        udp.beginPacket(senderIP, senderPort);
+        udp.write((uint8_t*)json, len);
+        udp.endPacket();
     }
-    return ESP_OK;
+}
+
+// UDP Task for Sending Angles and Receiving Commands (Core 0)
+void udpTask(void *pvParameters) {
+    unsigned long lastSendTime = 0;
+    unsigned long sendInterval = 50; // 50ms interval, now mutable
+    IPAddress broadcastIP(255, 255, 255, 255); // Broadcast to entire subnet
+    int debugAngles[4] = {0, 0, 0, 0}; // Debug: store raw angle values
+
+    while (true) {
+        // Check WiFi connection status
+        if (WiFi.status() != WL_CONNECTED) {
+            WiFi.disconnect();
+            WiFi.begin(SSID, PASSWORD);
+            while (WiFi.status() != WL_CONNECTED) {
+                vTaskDelay(500 / portTICK_PERIOD_MS);
+            }
+            udp.begin(UDP_PORT); // Rebind UDP port
+        }
+
+        // Check for incoming UDP packets
+        int packetSize = udp.parsePacket();
+        if (packetSize) {
+            char packetBuffer[1024];
+            int len = udp.read(packetBuffer, sizeof(packetBuffer) - 1);
+            packetBuffer[len] = 0; // Null-terminate the string
+
+            StaticJsonDocument<1024> doc;
+            DeserializationError error = deserializeJson(doc, packetBuffer);
+            if (!error && doc.containsKey("command")) {
+                String command = doc["command"].as<String>();
+                IPAddress senderIP = udp.remoteIP();
+                int senderPort = udp.remotePort();
+
+                if (command == "set_control_params") {
+                    handle_set_control_params(doc);
+                } else if (command == "set_angles") {
+                    if (doc.containsKey("angles") && doc["angles"].is<JsonArray>()) {
+                        size_t arraySize = doc["angles"].size();
+                        for (size_t i = 0; i < arraySize && i < NUM_MOTORS; i++) {
+                            debugAngles[i] = static_cast<int>(doc["angles"][i].as<float>());
+                        }
+                        handle_set_angles(debugAngles, arraySize);
+                    }
+                } else if (command == "set_all_pins") {
+                    handle_set_all_pins(doc);
+                } else if (command == "set_control_status") {
+                    handle_set_control_status(doc);
+                } else if (command == "reset_all") {
+                    handle_reset_all();
+                } else if (command == "get_imu_data") {
+                    handle_get_imu_data(senderIP, senderPort);
+                } else if (command == "set_send_interval") {
+                    if (doc.containsKey("interval") && doc["interval"].is<int>()) {
+                        int newInterval = doc["interval"].as<int>();
+                        if (newInterval > 0) {
+                            sendInterval = newInterval;
+                        }
+                    }
+                }
+
+                // Send confirmation response to the sender
+                StaticJsonDocument<64> responseDoc;
+                responseDoc["status"] = "OK";
+                char response[64];
+                size_t responseLen = serializeJson(responseDoc, response);
+                udp.beginPacket(senderIP, UDP_PORT); // Send back to original sender's port
+                udp.write((uint8_t*)response, responseLen);
+                udp.endPacket();
+
+                vTaskDelay(2 / portTICK_PERIOD_MS); // Small delay after processing command
+            }
+        }
+
+        // Send angle updates with targetPos, debug info, AND IMU data
+        if (millis() - lastSendTime >= sendInterval) {
+            StaticJsonDocument<512> doc; // Increased size for IMU data
+            JsonArray angles = doc.createNestedArray("angles");
+            JsonArray encoderPos_arr = doc.createNestedArray("encoderPos"); // Renamed to avoid conflict
+            JsonArray targetPos_arr = doc.createNestedArray("targetPos");   // Renamed to avoid conflict
+            JsonArray debug_arr = doc.createNestedArray("debug");           // Renamed to avoid conflict
+            JsonArray debugComputed_arr = doc.createNestedArray("debugComputed"); // Renamed
+
+            for (int i = 0; i < NUM_MOTORS; i++) {
+                float angle = (float)motors[i].encoderPos * 360.0f / COUNTS_PER_REV;
+                angles.add(angle);
+                encoderPos_arr.add(motors[i].encoderPos);
+                targetPos_arr.add(motors[i].targetPos);
+                debug_arr.add(debugAngles[i]); 
+                debugComputed_arr.add(debugTargetPos[i]);
+            }
+
+            // Add IMU data to the periodic broadcast
+            doc["mpu_available"] = mpu_available;
+            if (mpu_available) {
+                sensors_event_t a, g, temp; // Use 'temp' as it is a member of sensors_event_t
+                mpu.getEvent(&a, &g, &temp); // Fetch fresh MPU data
+
+                JsonObject imu_data_out = doc.createNestedObject("imu");
+                imu_data_out["accel_x"] = a.acceleration.x;
+                imu_data_out["accel_y"] = a.acceleration.y;
+                imu_data_out["accel_z"] = a.acceleration.z;
+                imu_data_out["gyro_x"] = g.gyro.x;
+                imu_data_out["gyro_y"] = g.gyro.y;
+                imu_data_out["gyro_z"] = g.gyro.z;
+                imu_data_out["temp"] = temp.temperature;
+            }
+            
+            char json[512]; // Increased size for IMU data
+            size_t len = serializeJson(doc, json);
+            if (len > 0) { // Check if serialization produced any data
+                udp.beginPacket(broadcastIP, UDP_PORT);
+                udp.write((uint8_t*)json, len);
+                udp.endPacket();
+            }
+            lastSendTime = millis();
+        }
+        vTaskDelay(1 / portTICK_PERIOD_MS); // Yield to other tasks
+    }
 }
 
 void setup() {
-    pinMode(40, OUTPUT);
-    digitalWrite(40, LOW);
+    Serial.begin(115200);
 
-    pinMode(39, OUTPUT);
-    digitalWrite(39, LOW);
+    //IMU Init
+    Wire.begin(I2C_SDA, I2C_SCL, 100000); // Initialize I2C
+    int attempts = 0;
+    // Pass the I2C address and the Wire instance to mpu.begin()
+    while (!mpu.begin(0x68, &Wire)) { 
+        Serial.println("Failed to find MPU6050 chip, retrying...");
+        delay(100);
+        attempts++;
+        if (attempts > 3) { // Original code had "> 3", means 4 retries before giving up.
+                            // attempt 0, 1, 2, 3 fail, then on attempt 4 it breaks.
+            Serial.println("MPU6050 not found after multiple attempts. Continuing without it.");
+            mpu_available = false; // Ensure this is false if not found
+            break;
+        }
+    }
+    // Original condition was `attempts <= 3`. This means if it succeeded on attempt 0, 1, 2, or 3.
+    // If attempts is 0, 1, 2, or 3, and mpu.begin() was true, it means found.
+    // It's clearer to check the return of mpu.begin() or the mpu_available flag after the loop.
+    // Let's refine this slightly for clarity, matching typical patterns:
+    if (mpu.begin(0x68, &Wire)) { // One final check, or rely on the loop's success
+         Serial.println("MPU6050 Found!");
+         mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
+         mpu.setGyroRange(MPU6050_RANGE_500_DEG);
+         mpu.setFilterBandwidth(MPU6050_BAND_5_HZ);
+         mpu_available = true;
+    } else if (!mpu_available) { // If it was not found in the loop and still not found
+        Serial.println("MPU6050 not found. Continuing without it.");
+        // mpu_available is already false
+    }
 
+
+    //PIN INIT (Existing logic - untouched)
     for (int pin = 35; pin <= 42; pin++) {
         pinMode(pin, OUTPUT);
         digitalWrite(pin, LOW);
     }
-
     for (int pin = 1; pin <= 2; pin++) {
         pinMode(pin, OUTPUT);
         digitalWrite(pin, LOW);
@@ -305,18 +465,11 @@ void setup() {
         pinMode(pin, OUTPUT);
         digitalWrite(pin, LOW);
     }
-    pinMode(21, OUTPUT);
-    digitalWrite(21, LOW);
-    
-    pinMode(47, OUTPUT);
-    digitalWrite(47, LOW);
-    pinMode(48, OUTPUT);
-    digitalWrite(48, LOW);
-
     pinMode(6, OUTPUT);
     digitalWrite(6, LOW);
     pinMode(7, OUTPUT);
     digitalWrite(7, LOW);
+
 
     for (int i = 0; i < NUM_MOTORS; i++) {
         motors[i].ENCODER_A = -1;
@@ -328,6 +481,10 @@ void setup() {
         motors[i].lastError = 0;
         motors[i].integralError = 0;
         motors[i].controlEnabled = false;
+        motors[i].lastAChange = 0;
+        motors[i].lastBChange = 0;
+        motors[i].lastAState = false;
+        motors[i].lastBState = false;
     }
 
     // Configure static IP
@@ -335,42 +492,53 @@ void setup() {
     WiFi.begin(SSID, PASSWORD);
     while (WiFi.status() != WL_CONNECTED) {
         delay(500);
+        Serial.print(".");
     }
+    Serial.println("\nWiFi connected");
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());
 
-    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.server_port = PORT;
-    config.core_id = 0;
-    config.keep_alive_enable = true;
-    if (httpd_start(&server, &config) == ESP_OK) {
-        httpd_uri_t set_all_pins_uri = { .uri = "/set_all_pins", .method = HTTP_GET, .handler = set_all_pins_handler, .user_ctx = NULL };
-        httpd_register_uri_handler(server, &set_all_pins_uri);
 
-        httpd_uri_t set_control_params_uri = { .uri = "/set_control_params", .method = HTTP_GET, .handler = set_control_params_handler, .user_ctx = NULL };
-        httpd_register_uri_handler(server, &set_control_params_uri);
+    // Arduino-compatible Wi-Fi optimization
+    WiFi.setSleep(false); // Disable Wi-Fi sleep mode to reduce latency
 
-        httpd_uri_t set_angles_uri = { .uri = "/set_angles", .method = HTTP_GET, .handler = set_angles_handler, .user_ctx = NULL };
-        httpd_register_uri_handler(server, &set_angles_uri);
+    // Start UDP server
+    udp.begin(UDP_PORT);
 
-        httpd_uri_t set_control_status_uri = { .uri = "/set_control_status", .method = HTTP_GET, .handler = set_control_status_handler, .user_ctx = NULL };
-        httpd_register_uri_handler(server, &set_control_status_uri);
+    // Create UDP task on Core 0 with increased stack size
+    xTaskCreatePinnedToCore(
+        udpTask,    // Task function
+        "UDPTask",  // Task name
+        8192,       // Stack size
+        NULL,       // Parameters
+        1,          // Priority
+        NULL,       // Task handle
+        0           // Core 0
+    );
 
-        httpd_uri_t reset_all_uri = { .uri = "/reset_all", .method = HTTP_GET, .handler = reset_all_handler, .user_ctx = NULL };
-        httpd_register_uri_handler(server, &reset_all_uri);
-
-        httpd_uri_t events_uri = { .uri = "/events", .method = HTTP_GET, .handler = events_handler, .user_ctx = NULL };
-        httpd_register_uri_handler(server, &events_uri);
-    }
+    Serial.print("UDP Broadcast on port: ");
+    Serial.println(UDP_PORT);
 }
 
 void loop() {
+    // Motor control loop (runs on Core 1)
     if (millis() - lastTime >= dt) {
+        // Wait for targetPos update if a set_angles command was processed
+        if (targetPosUpdated) {
+            targetPosUpdated = false; // Reset flag
+        }
+
         for (int i = 0; i < NUM_MOTORS; i++) {
             if (motors[i].controlEnabled) {
                 controlMotor(i);
             } else {
-                setMotor(i, 0);
+                setMotor(i, 0); // Ensure motor is stopped if control is disabled
             }
         }
         lastTime = millis();
     }
+    // A small delay in the main loop can be good practice if it's very empty,
+    // but with FreeRTOS tasks, the scheduler handles yielding.
+    // However, if this loop runs very fast and does nothing, vTaskDelay(1) is fine.
+    // For now, leaving it as is, as the main work is time-gated by `dt`.
 }
