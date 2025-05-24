@@ -52,11 +52,10 @@ struct Motor {
     int IN1;
     int IN2;
     volatile long encoderPos;
-    volatile long targetPos; // Made volatile for cross-core access
+    volatile long targetPos; 
     long lastError;
     float integralError;
     bool controlEnabled;
-    // For debouncing
     unsigned long lastAChange;
     unsigned long lastBChange;
     bool lastAState;
@@ -75,9 +74,8 @@ bool mpu_available = false;
 void IRAM_ATTR handleEncoderA(void* arg) {
     Motor* motor = (Motor*)arg;
     unsigned long now = micros();
-    if (now - motor->lastAChange < 1000) return; // Debounce: ignore changes faster than 1ms
+    if (now - motor->lastAChange < 1000) return; 
     motor->lastAChange = now;
-
     bool encAVal = digitalRead(motor->ENCODER_A);
     bool encBVal = digitalRead(motor->ENCODER_B);
     if (encAVal != motor->lastAState) {
@@ -93,9 +91,8 @@ void IRAM_ATTR handleEncoderA(void* arg) {
 void IRAM_ATTR handleEncoderB(void* arg) {
     Motor* motor = (Motor*)arg;
     unsigned long now = micros();
-    if (now - motor->lastBChange < 1000) return; // Debounce: ignore changes faster than 1ms
+    if (now - motor->lastBChange < 1000) return; 
     motor->lastBChange = now;
-
     bool encAVal = digitalRead(motor->ENCODER_A);
     bool encBVal = digitalRead(motor->ENCODER_B);
     if (encBVal != motor->lastBState) {
@@ -111,11 +108,10 @@ void IRAM_ATTR handleEncoderB(void* arg) {
 // Motor Control Functions
 void setMotor(int motorIndex, int power) {
     Motor &motor = motors[motorIndex];
-    int channel1 = motorIndex * 2;      // Channels 0, 2, 4, 6
-    int channel2 = motorIndex * 2 + 1;  // Channels 1, 3, 5, 7
-
+    int channel1 = motorIndex * 2;      
+    int channel2 = motorIndex * 2 + 1;  
     if (power == 0) {
-        ledcWrite(motor.IN1, 255);  // Brake
+        ledcWrite(motor.IN1, 255); 
         ledcWrite(motor.IN2, 255);
     } else if (power > 0) {
         ledcWrite(motor.IN2, 0);
@@ -130,17 +126,13 @@ int computePower(long error, long errorDelta) {
     if (abs(error) <= DEAD_ZONE) {
         return 0;
     }
-
     float scaled_error = constrain((float)error / POSITION_THRESHOLD, -1.0, 1.0);
     float dt_sec = dt / 1000.0;
-
     float p_term = kp * scaled_error * MAX_POWER;
     float d_term = kd * (errorDelta / dt_sec);
-
     if (abs(error) <= DEAD_ZONE * 5) {
         d_term *= 3.0;
     }
-
     int power = p_term + constrain(d_term, -MAX_POWER / 2, MAX_POWER / 2);
     return constrain(power, -MAX_POWER, MAX_POWER);
 }
@@ -151,17 +143,14 @@ void controlMotor(int motorIndex) {
         setMotor(motorIndex, 0);
         return;
     }
-
     long error = motor.targetPos - motor.encoderPos;
     long errorDelta = error - motor.lastError;
     motor.lastError = error;
-
     if (abs(error) < MAX_POWER / ki) {
         motor.integralError += error * (dt / 1000.0);
     } else {
         motor.integralError = constrain(motor.integralError, -MAX_POWER / ki, MAX_POWER / ki);
     }
-
     int power = computePower(error, errorDelta) + ki * motor.integralError;
     setMotor(motorIndex, power);
 }
@@ -180,9 +169,9 @@ void handle_set_angles(int angles[], size_t arraySize) {
         int angleDeg = angles[i];
         long computedTargetPos = static_cast<long>(angleDeg * static_cast<float>(COUNTS_PER_REV) / 360.0);
         motors[i].targetPos = computedTargetPos;
-        debugTargetPos[i] = computedTargetPos; // Debug: store computed value
+        debugTargetPos[i] = computedTargetPos; 
     }
-    targetPosUpdated = true; // Signal that targetPos has been updated
+    targetPosUpdated = true; 
 }
 
 void handle_set_all_pins(const JsonDocument& doc) {
@@ -192,7 +181,6 @@ void handle_set_all_pins(const JsonDocument& doc) {
         int new_ENCODER_B = motor.ENCODER_B;
         int new_IN1 = motor.IN1;
         int new_IN2 = motor.IN2;
-
         char key[12];
         snprintf(key, sizeof(key), "ENCODER_A%d", i);
         if (doc.containsKey(key)) new_ENCODER_A = doc[key].as<int>();
@@ -202,15 +190,12 @@ void handle_set_all_pins(const JsonDocument& doc) {
         if (doc.containsKey(key)) new_IN1 = doc[key].as<int>();
         snprintf(key, sizeof(key), "IN2_%d", i);
         if (doc.containsKey(key)) new_IN2 = doc[key].as<int>();
-
         if (motor.ENCODER_A != -1) detachInterrupt(digitalPinToInterrupt(motor.ENCODER_A));
         if (motor.ENCODER_B != -1) detachInterrupt(digitalPinToInterrupt(motor.ENCODER_B));
-
         motor.ENCODER_A = new_ENCODER_A;
         motor.ENCODER_B = new_ENCODER_B;
         motor.IN1 = new_IN1;
         motor.IN2 = new_IN2;
-
         if (motor.ENCODER_A != -1) {
             pinMode(motor.ENCODER_A, INPUT_PULLUP);
             if (digitalPinToInterrupt(motor.ENCODER_A) != NOT_AN_INTERRUPT) {
@@ -223,17 +208,16 @@ void handle_set_all_pins(const JsonDocument& doc) {
                 attachInterruptArg(digitalPinToInterrupt(motor.ENCODER_B), handleEncoderB, &motor, CHANGE);
             }
         }
-
         if (motor.IN1 != -1) {
             pinMode(motor.IN1, OUTPUT);
             digitalWrite(motor.IN1, LOW);
-            ledcAttachChannel(motor.IN1, 1000, 8, i * 2);  // Channels 0, 2, 4, 6
+            ledcAttachChannel(motor.IN1, 1000, 8, i * 2); 
             ledcWrite(motor.IN1, 255);
         }
         if (motor.IN2 != -1) {
             pinMode(motor.IN2, OUTPUT);
             digitalWrite(motor.IN2, LOW);
-            ledcAttachChannel(motor.IN2, 1000, 8, i * 2 + 1);  // Channels 1, 3, 5, 7
+            ledcAttachChannel(motor.IN2, 1000, 8, i * 2 + 1); 
             ledcWrite(motor.IN2, 255);
         }
     }
@@ -262,17 +246,16 @@ void handle_reset_all() {
         motors[i].targetPos = 0;
         motors[i].lastError = 0;
         motors[i].integralError = 0;
-        debugTargetPos[i] = 0; // Reset debug values
+        debugTargetPos[i] = 0; 
     }
 }
 
 void handle_get_imu_data(IPAddress senderIP, int senderPort) {
     if (mpu_available) {
-        sensors_event_t a, g, temp; // Use 'temp' as it is a member of sensors_event_t
+        sensors_event_t a, g, temp; 
         mpu.getEvent(&a, &g, &temp);
-
-        StaticJsonDocument<256> doc; // Sufficient for sending only IMU data
-        JsonObject imu_data = doc.createNestedObject("imu"); // Renamed for clarity
+        StaticJsonDocument<256> doc; 
+        JsonObject imu_data = doc.createNestedObject("imu"); 
         imu_data["accel_x"] = a.acceleration.x;
         imu_data["accel_y"] = a.acceleration.y;
         imu_data["accel_z"] = a.acceleration.z;
@@ -280,20 +263,17 @@ void handle_get_imu_data(IPAddress senderIP, int senderPort) {
         imu_data["gyro_y"] = g.gyro.y;
         imu_data["gyro_z"] = g.gyro.z;
         imu_data["temp"] = temp.temperature;
-
         char json[256];
         size_t len = serializeJson(doc, json);
-
-        udp.beginPacket(senderIP, senderPort);
+        udp.beginPacket(senderIP, senderPort); // Use senderPort for reply
         udp.write((uint8_t*)json, len);
         udp.endPacket();
     } else {
-        StaticJsonDocument<64> doc; // Increased slightly just in case, 32 was tight
+        StaticJsonDocument<64> doc; 
         doc["error"] = "MPU6050 not initialized";
         char json[64];
         size_t len = serializeJson(doc, json);
-
-        udp.beginPacket(senderIP, senderPort);
+        udp.beginPacket(senderIP, senderPort); // Use senderPort for reply
         udp.write((uint8_t*)json, len);
         udp.endPacket();
     }
@@ -302,34 +282,32 @@ void handle_get_imu_data(IPAddress senderIP, int senderPort) {
 // UDP Task for Sending Angles and Receiving Commands (Core 0)
 void udpTask(void *pvParameters) {
     unsigned long lastSendTime = 0;
-    unsigned long sendInterval = 50; // 50ms interval, now mutable
-    IPAddress broadcastIP(255, 255, 255, 255); // Broadcast to entire subnet
-    int debugAngles[4] = {0, 0, 0, 0}; // Debug: store raw angle values
+    unsigned long sendInterval = 50; 
+    IPAddress broadcastIP(255, 255, 255, 255); 
+    int debugAngles[4] = {0, 0, 0, 0}; 
 
     while (true) {
-        // Check WiFi connection status
         if (WiFi.status() != WL_CONNECTED) {
             WiFi.disconnect();
             WiFi.begin(SSID, PASSWORD);
             while (WiFi.status() != WL_CONNECTED) {
                 vTaskDelay(500 / portTICK_PERIOD_MS);
             }
-            udp.begin(UDP_PORT); // Rebind UDP port
+            udp.begin(UDP_PORT); 
         }
 
-        // Check for incoming UDP packets
         int packetSize = udp.parsePacket();
         if (packetSize) {
             char packetBuffer[1024];
             int len = udp.read(packetBuffer, sizeof(packetBuffer) - 1);
-            packetBuffer[len] = 0; // Null-terminate the string
+            packetBuffer[len] = 0; 
 
             StaticJsonDocument<1024> doc;
             DeserializationError error = deserializeJson(doc, packetBuffer);
             if (!error && doc.containsKey("command")) {
                 String command = doc["command"].as<String>();
                 IPAddress senderIP = udp.remoteIP();
-                int senderPort = udp.remotePort();
+                int senderPort = udp.remotePort(); // ****** GET SENDER'S PORT ******
 
                 if (command == "set_control_params") {
                     handle_set_control_params(doc);
@@ -348,7 +326,7 @@ void udpTask(void *pvParameters) {
                 } else if (command == "reset_all") {
                     handle_reset_all();
                 } else if (command == "get_imu_data") {
-                    handle_get_imu_data(senderIP, senderPort);
+                    handle_get_imu_data(senderIP, senderPort); // Pass senderPort here too
                 } else if (command == "set_send_interval") {
                     if (doc.containsKey("interval") && doc["interval"].is<int>()) {
                         int newInterval = doc["interval"].as<int>();
@@ -357,29 +335,28 @@ void udpTask(void *pvParameters) {
                         }
                     }
                 }
-
-                // Send confirmation response to the sender
                 StaticJsonDocument<64> responseDoc;
                 responseDoc["status"] = "OK";
                 char response[64];
                 size_t responseLen = serializeJson(responseDoc, response);
-                udp.beginPacket(senderIP, UDP_PORT); // Send back to original sender's port
+
+                // ****** MODIFICATION: Reply to senderIP AND senderPort ******
+                udp.beginPacket(senderIP, senderPort); 
                 udp.write((uint8_t*)response, responseLen);
                 udp.endPacket();
-
-                vTaskDelay(2 / portTICK_PERIOD_MS); // Small delay after processing command
+                // ****** END MODIFICATION ******
+                vTaskDelay(2 / portTICK_PERIOD_MS); 
             }
         }
 
-        // Send angle updates with targetPos, debug info, AND IMU data
         if (millis() - lastSendTime >= sendInterval) {
-            StaticJsonDocument<512> doc; // Increased size for IMU data
+            StaticJsonDocument<512 + 64> doc; 
             JsonArray angles = doc.createNestedArray("angles");
-            JsonArray encoderPos_arr = doc.createNestedArray("encoderPos"); // Renamed to avoid conflict
-            JsonArray targetPos_arr = doc.createNestedArray("targetPos");   // Renamed to avoid conflict
-            JsonArray debug_arr = doc.createNestedArray("debug");           // Renamed to avoid conflict
-            JsonArray debugComputed_arr = doc.createNestedArray("debugComputed"); // Renamed
-
+            JsonArray encoderPos_arr = doc.createNestedArray("encoderPos"); 
+            JsonArray targetPos_arr = doc.createNestedArray("targetPos");   
+            JsonArray debug_arr = doc.createNestedArray("debug");          
+            JsonArray debugComputed_arr = doc.createNestedArray("debugComputed"); 
+            bool allMotorsCurrentlyEnabled = true; 
             for (int i = 0; i < NUM_MOTORS; i++) {
                 float angle = (float)motors[i].encoderPos * 360.0f / COUNTS_PER_REV;
                 angles.add(angle);
@@ -387,14 +364,15 @@ void udpTask(void *pvParameters) {
                 targetPos_arr.add(motors[i].targetPos);
                 debug_arr.add(debugAngles[i]); 
                 debugComputed_arr.add(debugTargetPos[i]);
+                if (!motors[i].controlEnabled) { 
+                    allMotorsCurrentlyEnabled = false;
+                }
             }
-
-            // Add IMU data to the periodic broadcast
+            doc["esp_control_fully_enabled"] = allMotorsCurrentlyEnabled; 
             doc["mpu_available"] = mpu_available;
             if (mpu_available) {
-                sensors_event_t a, g, temp; // Use 'temp' as it is a member of sensors_event_t
-                mpu.getEvent(&a, &g, &temp); // Fetch fresh MPU data
-
+                sensors_event_t a, g, temp; 
+                mpu.getEvent(&a, &g, &temp); 
                 JsonObject imu_data_out = doc.createNestedObject("imu");
                 imu_data_out["accel_x"] = a.acceleration.x;
                 imu_data_out["accel_y"] = a.acceleration.y;
@@ -404,55 +382,43 @@ void udpTask(void *pvParameters) {
                 imu_data_out["gyro_z"] = g.gyro.z;
                 imu_data_out["temp"] = temp.temperature;
             }
-            
-            char json[512]; // Increased size for IMU data
+            char json[512 + 64]; 
             size_t len = serializeJson(doc, json);
-            if (len > 0) { // Check if serialization produced any data
+            if (len > 0) { 
                 udp.beginPacket(broadcastIP, UDP_PORT);
                 udp.write((uint8_t*)json, len);
                 udp.endPacket();
             }
             lastSendTime = millis();
         }
-        vTaskDelay(1 / portTICK_PERIOD_MS); // Yield to other tasks
+        vTaskDelay(1 / portTICK_PERIOD_MS); 
     }
 }
 
 void setup() {
     Serial.begin(115200);
-
-    //IMU Init
-    Wire.begin(I2C_SDA, I2C_SCL, 100000); // Initialize I2C
+    Wire.begin(I2C_SDA, I2C_SCL, 100000); 
     int attempts = 0;
-    // Pass the I2C address and the Wire instance to mpu.begin()
     while (!mpu.begin(0x68, &Wire)) { 
         Serial.println("Failed to find MPU6050 chip, retrying...");
         delay(100);
         attempts++;
-        if (attempts > 3) { // Original code had "> 3", means 4 retries before giving up.
-                            // attempt 0, 1, 2, 3 fail, then on attempt 4 it breaks.
+        if (attempts > 3) { 
             Serial.println("MPU6050 not found after multiple attempts. Continuing without it.");
-            mpu_available = false; // Ensure this is false if not found
+            mpu_available = false; 
             break;
         }
     }
-    // Original condition was `attempts <= 3`. This means if it succeeded on attempt 0, 1, 2, or 3.
-    // If attempts is 0, 1, 2, or 3, and mpu.begin() was true, it means found.
-    // It's clearer to check the return of mpu.begin() or the mpu_available flag after the loop.
-    // Let's refine this slightly for clarity, matching typical patterns:
-    if (mpu.begin(0x68, &Wire)) { // One final check, or rely on the loop's success
+    if (mpu.begin(0x68, &Wire)) { 
          Serial.println("MPU6050 Found!");
          mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
          mpu.setGyroRange(MPU6050_RANGE_500_DEG);
          mpu.setFilterBandwidth(MPU6050_BAND_5_HZ);
          mpu_available = true;
-    } else if (!mpu_available) { // If it was not found in the loop and still not found
+    } else if (!mpu_available) { 
         Serial.println("MPU6050 not found. Continuing without it.");
-        // mpu_available is already false
     }
 
-
-    //PIN INIT (Existing logic - untouched)
     for (int pin = 35; pin <= 42; pin++) {
         pinMode(pin, OUTPUT);
         digitalWrite(pin, LOW);
@@ -465,80 +431,44 @@ void setup() {
         pinMode(pin, OUTPUT);
         digitalWrite(pin, LOW);
     }
-    pinMode(6, OUTPUT);
-    digitalWrite(6, LOW);
-    pinMode(7, OUTPUT);
-    digitalWrite(7, LOW);
-
+    pinMode(6, OUTPUT); digitalWrite(6, LOW);
+    pinMode(7, OUTPUT); digitalWrite(7, LOW);
 
     for (int i = 0; i < NUM_MOTORS; i++) {
-        motors[i].ENCODER_A = -1;
-        motors[i].ENCODER_B = -1;
-        motors[i].IN1 = -1;
-        motors[i].IN2 = -1;
-        motors[i].encoderPos = 0;
-        motors[i].targetPos = 0;
-        motors[i].lastError = 0;
-        motors[i].integralError = 0;
+        motors[i].ENCODER_A = -1; motors[i].ENCODER_B = -1;
+        motors[i].IN1 = -1; motors[i].IN2 = -1;
+        motors[i].encoderPos = 0; motors[i].targetPos = 0;
+        motors[i].lastError = 0; motors[i].integralError = 0;
         motors[i].controlEnabled = false;
-        motors[i].lastAChange = 0;
-        motors[i].lastBChange = 0;
-        motors[i].lastAState = false;
-        motors[i].lastBState = false;
+        motors[i].lastAChange = 0; motors[i].lastBChange = 0;
+        motors[i].lastAState = false; motors[i].lastBState = false;
     }
 
-    // Configure static IP
     WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS);
     WiFi.begin(SSID, PASSWORD);
     while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        Serial.print(".");
+        delay(500); Serial.print(".");
     }
     Serial.println("\nWiFi connected");
-    Serial.print("IP address: ");
-    Serial.println(WiFi.localIP());
-
-
-    // Arduino-compatible Wi-Fi optimization
-    WiFi.setSleep(false); // Disable Wi-Fi sleep mode to reduce latency
-
-    // Start UDP server
+    Serial.print("IP address: "); Serial.println(WiFi.localIP());
+    WiFi.setSleep(false); 
     udp.begin(UDP_PORT);
-
-    // Create UDP task on Core 0 with increased stack size
-    xTaskCreatePinnedToCore(
-        udpTask,    // Task function
-        "UDPTask",  // Task name
-        8192,       // Stack size
-        NULL,       // Parameters
-        1,          // Priority
-        NULL,       // Task handle
-        0           // Core 0
-    );
-
-    Serial.print("UDP Broadcast on port: ");
-    Serial.println(UDP_PORT);
+    xTaskCreatePinnedToCore( udpTask, "UDPTask", 8192, NULL, 1, NULL, 0 );
+    Serial.print("UDP Broadcast on port: "); Serial.println(UDP_PORT);
 }
 
 void loop() {
-    // Motor control loop (runs on Core 1)
     if (millis() - lastTime >= dt) {
-        // Wait for targetPos update if a set_angles command was processed
         if (targetPosUpdated) {
-            targetPosUpdated = false; // Reset flag
+            targetPosUpdated = false; 
         }
-
         for (int i = 0; i < NUM_MOTORS; i++) {
             if (motors[i].controlEnabled) {
                 controlMotor(i);
             } else {
-                setMotor(i, 0); // Ensure motor is stopped if control is disabled
+                setMotor(i, 0); 
             }
         }
         lastTime = millis();
     }
-    // A small delay in the main loop can be good practice if it's very empty,
-    // but with FreeRTOS tasks, the scheduler handles yielding.
-    // However, if this loop runs very fast and does nothing, vTaskDelay(1) is fine.
-    // For now, leaving it as is, as the main work is time-gated by `dt`.
 }

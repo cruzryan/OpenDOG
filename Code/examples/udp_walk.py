@@ -48,15 +48,14 @@ if len(ACTUATOR_NAME_TO_INDEX_MAP) != NUM_MOTORS:
 # Order corresponds to motor indices 0-7
 MOTOR_PINS = [
     (39, 40, 41, 42),  # Motor 0 (FL_knee) -> ESP1_M0
-    (37, 38, 1, 2),    # Motor 1 (FR_tigh) -> ESP1_M1
+    (16, 15, 7, 6),    # Motor 1 (Now FL_tigh, was FR_tigh) -> ESP1_M1
     (17, 18, 5, 4),    # Motor 2 (FR_knee) -> ESP1_M2
-    (16, 15, 7, 6),    # Motor 3 (FL_tigh) -> ESP1_M3
+    (37, 38, 1, 2),    # Motor 3 (Now FR_tigh, was FL_tigh) -> ESP1_M3
     (37, 38, 1, 2),    # Motor 4 (BR_knee) -> ESP2_M0
     (40, 39, 42, 41),  # Motor 5 (BR_tigh) -> ESP2_M1
     (15, 16, 6, 7),    # Motor 6 (BL_knee) -> ESP2_M2
     (18, 17, 4, 5),    # Motor 7 (BL_tigh) -> ESP2_M3
 ]
-
 
 # --- Load Walk Sequence ---
 walk_sequence = None
@@ -81,7 +80,7 @@ try:
     print("QuadPilotBody (command instance) initialized.")
 
     print("Setting initial control parameters...")
-    if not body_controller.set_control_params(P=0.9, I=0.0, D=0.3, dead_zone=5, pos_thresh=5):
+    if not body_controller.set_control_params(P=0.9, I=0.001, D=0.3, dead_zone=10, pos_thresh=5):
         raise Exception("Failed to set control parameters.")
     print("Control parameters set.")
     time.sleep(0.1)
@@ -140,9 +139,9 @@ debounce_interval = 0.2 # Debounce for manual angle setting (A, D keys)
 def get_home_angles():
     """Returns the defined home pose angles."""
     home = [0.0] * NUM_MOTORS
-    home[ACTUATOR_NAME_TO_INDEX_MAP["FL_tigh_actuator"]] = -45.0
+    home[ACTUATOR_NAME_TO_INDEX_MAP["FL_tigh_actuator"]] = 45.0
     home[ACTUATOR_NAME_TO_INDEX_MAP["FL_knee_actuator"]] = 45.0
-    home[ACTUATOR_NAME_TO_INDEX_MAP["FR_tigh_actuator"]] = 45.0
+    home[ACTUATOR_NAME_TO_INDEX_MAP["FR_tigh_actuator"]] = -45.0
     home[ACTUATOR_NAME_TO_INDEX_MAP["FR_knee_actuator"]] = 45.0
     home[ACTUATOR_NAME_TO_INDEX_MAP["BR_tigh_actuator"]] = 45.0
     home[ACTUATOR_NAME_TO_INDEX_MAP["BR_knee_actuator"]] = -45.0

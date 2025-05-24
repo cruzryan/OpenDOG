@@ -1,49 +1,62 @@
 [
   {
-    "duration": 1.0,
+    "duration": 0.7,
     "targets_deg": {
-      "FR_tigh_actuator": 45.0,
+      "FR_tigh_actuator": -45.0,
       "FR_knee_actuator": 45.0,
 
-      "FL_tigh_actuator": -30.0,
-      "FL_knee_actuator": 55.0,
-      "BR_tigh_actuator": 40.0,
-      "BR_knee_actuator": -30.0,
+      "FL_tigh_actuator": 45.0,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 45.0,
+      "BR_knee_actuator": -45.0,
 
       "BL_tigh_actuator": 45.0,
       "BL_knee_actuator": -45.0
     }
   },
   {
-    "duration": 1.0,
+    "duration": 0.7,
     "targets_deg": {
-      "FR_tigh_actuator": 35.0,
-      "FR_knee_actuator": 55.0,
+      "FR_tigh_actuator": -30.0,
+      "FR_knee_actuator": 50.0,
 
-      "FL_tigh_actuator": -55.0,
-      "FL_knee_actuator": 40.0,
-      "BR_tigh_actuator": 55.0,
-      "BR_knee_actuator": -40.0,
-
-      "BL_tigh_actuator": 35.0,
-      "BL_knee_actuator": -70.0
-    }
-  },
-  {
-    "duration": 1.0,
-    "targets_deg": {
-      "FR_tigh_actuator": 55.0,
-      "FR_knee_actuator": 40.0,
-
-      "FL_tigh_actuator": -45.0,
+      "FL_tigh_actuator": 45.0,
       "FL_knee_actuator": 45.0,
       "BR_tigh_actuator": 45.0,
       "BR_knee_actuator": -45.0,
 
-      "BL_tigh_actuator": 55.0,
-      "BL_knee_actuator": -47.0
+      "BL_tigh_actuator": 30.0,
+      "BL_knee_actuator": -50.0
+    }
+  },
+  {
+    "duration": 0.7,
+    "targets_deg": {
+      "FR_tigh_actuator": -45.0,
+      "FR_knee_actuator": 45.0,
+
+      "FL_tigh_actuator": 45.0,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 45.0,
+      "BR_knee_actuator": -45.0,
+
+      "BL_tigh_actuator": 45.0,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 0.7,
+    "targets_deg": {
+      "FR_tigh_actuator": -45.0,
+      "FR_knee_actuator": 45.0,
+
+      "FL_tigh_actuator": 30.0,
+      "FL_knee_actuator": 50.0,
+      "BR_tigh_actuator": 30.0,
+      "BR_knee_actuator": -50.0,
+
+      "BL_tigh_actuator": 45.0,
+      "BL_knee_actuator": -45.0
     }
   }
-
-
 ]
