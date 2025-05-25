@@ -20,14 +20,10 @@ except ImportError:
     sys.exit(1)
 
 # --- Motor Name Configuration (for display purposes) ---
-# This should match or be consistent with your main control script's motor mapping
-# For display, we primarily need names for motors 0-7.
-# (Global_Motor_Index, "Name")
 MOTOR_NAMES = [
     (0, "FL_knee"), (1, "FR_tigh"), (2, "FR_knee"), (3, "FL_tigh"),
     (4, "BR_knee"), (5, "BR_tigh"), (6, "BL_knee"), (7, "BL_tigh"),
 ]
-# Create a simple lookup map
 MOTOR_NAME_MAP = {idx: name for idx, name in MOTOR_NAMES}
 NUM_MOTORS_PER_ESP = 4
 
@@ -37,10 +33,10 @@ def display_dashboard_data(body_monitor: QuadPilotBody):
     try:
         while True:
             os.system('cls' if os.name == 'nt' else 'clear')
-            print("=" * 60)
-            print("QUADRUPED REAL-TIME DATA DASHBOARD")
+            print("=" * 70) # Increased width
+            print("QUADRUPED REAL-TIME DATA DASHBOARD (DMP Enhanced)")
             print(f"Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-            print("=" * 60)
+            print("=" * 70)
 
             for esp_idx, esp_ip in enumerate(body_monitor.ips):
                 print(f"\n--- ESP32 #{esp_idx + 1} ({esp_ip}) ---")
@@ -49,40 +45,62 @@ def display_dashboard_data(body_monitor: QuadPilotBody):
                     print("  No data received yet from this ESP32.")
                     continue
 
-                # IMU Data
-                mpu_avail = body_monitor.is_mpu_available_for_esp(esp_idx)
-                print(f"  MPU6050 Status: {'AVAILABLE' if mpu_avail else 'NOT AVAILABLE'}")
-                if mpu_avail:
-                    imu_data = body_monitor.get_latest_imu_data_for_esp(esp_idx)
-                    if imu_data:
-                        print("  IMU Data:")
-                        print(f"    Accel (g):  X={imu_data.get('accel_x', 0.0): >6.2f}, Y={imu_data.get('accel_y', 0.0): >6.2f}, Z={imu_data.get('accel_z', 0.0): >6.2f}")
-                        print(f"    Gyro (dps): X={imu_data.get('gyro_x', 0.0): >6.2f}, Y={imu_data.get('gyro_y', 0.0): >6.2f}, Z={imu_data.get('gyro_z', 0.0): >6.2f}")
-                        print(f"    Temp (C):   {imu_data.get('temp', 0.0):.2f}")
+                # Get motor data first to access 'dmp_ready' status
+                esp_motor_data = body_monitor.get_latest_motor_data_for_esp(esp_idx)
+                dmp_is_ready = False
+                if esp_motor_data:
+                    dmp_is_ready = esp_motor_data.get('dmp_ready', False) # Use dmp_ready from motor_data
+                else: # Fallback if motor_data itself is None
+                    dmp_is_ready = body_monitor.is_dmp_ready_for_esp(esp_idx)
+
+
+                print(f"  DMP Status: {'READY' if dmp_is_ready else 'NOT READY / UNAVAILABLE'}")
+
+                if dmp_is_ready:
+                    # Use the new getter for structured DMP data
+                    dmp_data = body_monitor.get_latest_dmp_data_for_esp(esp_idx)
+                    if dmp_data:
+                        quat = dmp_data.get('quaternion', {})
+                        accel = dmp_data.get('world_accel_mps2', {})
+                        ypr = dmp_data.get('ypr_deg', {})
+
+                        print("  DMP Data:")
+                        print(f"    Quaternion: W={quat.get('w', 0.0): >6.3f}, X={quat.get('x', 0.0): >6.3f}, Y={quat.get('y', 0.0): >6.3f}, Z={quat.get('z', 0.0): >6.3f}")
+                        print(f"    World Accel (m/s^2): AX={accel.get('ax', 0.0): >6.3f}, AY={accel.get('ay', 0.0): >6.3f}, AZ={accel.get('az', 0.0): >6.3f}")
+                        print(f"    YPR (degrees): Yaw={ypr.get('yaw', 0.0): >6.1f}, Pitch={ypr.get('pitch', 0.0): >6.1f}, Roll={ypr.get('roll', 0.0): >6.1f}")
                     else:
-                        print("    IMU data not populated yet (or error in reception).")
-                
+                        print("    DMP data not populated yet (or error in reception).")
+                else:
+                    # Optionally, try to display old IMU data if you want to keep that path for non-DMP MPU
+                    # For now, we'll just indicate DMP is not ready.
+                    # legacy_imu_data = body_monitor.get_latest_imu_data_for_esp(esp_idx) # This getter is now deprecated
+                    # if legacy_imu_data:
+                    #     print("  Legacy IMU Data (non-DMP):")
+                    #     print(f"    Accel (raw?): X={legacy_imu_data.get('accel_x', 0.0): >6.2f}, Y={legacy_imu_data.get('accel_y', 0.0): >6.2f}, Z={legacy_imu_data.get('accel_z', 0.0): >6.2f}")
+                    #     print(f"    Gyro (raw?):  X={legacy_imu_data.get('gyro_x', 0.0): >6.2f}, Y={legacy_imu_data.get('gyro_y', 0.0): >6.2f}, Z={legacy_imu_data.get('gyro_z', 0.0): >6.2f}")
+                    pass # Handled by "DMP Status: NOT READY"
+
                 # Motor Data
                 print("\n  Motor Data (Angle, EncoderPos, TargetPos):")
-                esp_motor_data = body_monitor.get_latest_motor_data_for_esp(esp_idx)
-                if esp_motor_data:
+                if esp_motor_data: # We fetched this earlier
                     for motor_local_idx in range(NUM_MOTORS_PER_ESP):
                         global_motor_idx = esp_idx * NUM_MOTORS_PER_ESP + motor_local_idx
                         motor_name = MOTOR_NAME_MAP.get(global_motor_idx, f"M{global_motor_idx}")
-                        
-                        angle = esp_motor_data['angles'][motor_local_idx] if motor_local_idx < len(esp_motor_data.get('angles',[])) else "N/A"
-                        enc_pos = esp_motor_data['encoderPos'][motor_local_idx] if motor_local_idx < len(esp_motor_data.get('encoderPos',[])) else "N/A"
-                        tgt_pos = esp_motor_data['targetPos'][motor_local_idx] if motor_local_idx < len(esp_motor_data.get('targetPos',[])) else "N/A"
-                        
-                        # Optional Debug Data
-                        # dbg1 = esp_motor_data['debug'][motor_local_idx] if motor_local_idx < len(esp_motor_data.get('debug',[])) else "N/A"
-                        # dbg2 = esp_motor_data['debugComputed'][motor_local_idx] if motor_local_idx < len(esp_motor_data.get('debugComputed',[])) else "N/A"
-                        
-                        print(f"    {motor_name:<8s} (Global M{global_motor_idx}): {angle:>6.1f}, {enc_pos:>7}, {tgt_pos:>7}")
+
+                        angle_val = esp_motor_data['angles'][motor_local_idx] if motor_local_idx < len(esp_motor_data.get('angles',[])) else "N/A"
+                        enc_pos_val = esp_motor_data['encoderPos'][motor_local_idx] if motor_local_idx < len(esp_motor_data.get('encoderPos',[])) else "N/A"
+                        tgt_pos_val = esp_motor_data['targetPos'][motor_local_idx] if motor_local_idx < len(esp_motor_data.get('targetPos',[])) else "N/A"
+
+                        # Convert to string for consistent formatting if N/A
+                        angle_str = f"{angle_val:>6.1f}" if isinstance(angle_val, (int, float)) else f"{str(angle_val):>6}"
+                        enc_pos_str = f"{enc_pos_val:>7}" if isinstance(enc_pos_val, (int, float)) else f"{str(enc_pos_val):>7}"
+                        tgt_pos_str = f"{tgt_pos_val:>7}" if isinstance(tgt_pos_val, (int, float)) else f"{str(tgt_pos_val):>7}"
+
+                        print(f"    {motor_name:<8s} (Global M{global_motor_idx}): {angle_str}, {enc_pos_str}, {tgt_pos_str}")
                 else:
                     print("    Motor data not populated yet for this ESP.")
-            
-            print("\n" + "=" * 60)
+
+            print("\n" + "=" * 70)
             print("Press Ctrl+C to stop the dashboard.")
             time.sleep(0.1) # Refresh rate of the dashboard display
 
@@ -90,28 +108,23 @@ def display_dashboard_data(body_monitor: QuadPilotBody):
         print("\nDashboard stopping due to Ctrl+C.")
     except Exception as e:
         print(f"\nAn error occurred in the dashboard display loop: {e}")
+        import traceback
+        traceback.print_exc()
+
 
 if __name__ == "__main__":
     monitor_instance = None
     print("Initializing QuadPilotBody for monitoring...")
     try:
-        # IMPORTANT: listen_for_broadcasts=True for the dashboard
         monitor_instance = QuadPilotBody(listen_for_broadcasts=True)
         print("QuadPilotBody (monitoring instance) initialized. Listener thread started.")
-        
-        # Optionally, ask ESP32s to send data at a certain rate if they aren't already
-        # This might conflict if udp_walk.py also tries to set this.
-        # Best if ESP32s default to a reasonable broadcast rate.
-        # Or, only one script (e.g., udp_walk.py) sets it once at the start.
-        # print("Requesting ESP32s to send data every 50ms (if not already)...")
-        # if not monitor_instance.set_send_interval(50):
-        #     print("Warning: Failed to set send interval for one or both ESPs from dashboard.")
-        # time.sleep(0.2) # Give time for command to be processed
-
+        time.sleep(0.5) # Give a moment for the listener to potentially receive first packets
         display_dashboard_data(monitor_instance)
 
     except Exception as e:
         print(f"FATAL: Failed to initialize or run dashboard: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         if monitor_instance:
             print("Closing QuadPilotBody (monitoring instance)...")
