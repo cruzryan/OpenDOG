@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Quadruped Dashboard (DMP)</title>
+    <title>Quadruped Dashboard (DMP + Path)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -11,8 +11,10 @@
             --bg-color: #ffffff; --card-bg-color: #f9f9f9; --border-color: #e0e0e0;
             --text-color: #333333; --text-muted-color: #777777; --accent-color: #000000;
             --icon-color: #333333; --button-text-color: #ffffff; --button-bg-color: #000000;
-            --success-color: #28a745; --error-color: #dc3545; --graph-line-color: #000000;
-            --graph-grid-color: #eeeeee;
+            --success-color: #28a745; --error-color: #dc3545;
+            /* --graph-line-color: #000000; */ /* Old */
+            --graph-line-color: #007bff; /* NEW: Blue for graphs */
+            --graph-grid-color: #eeeeee; --path-color: #007bff; --arrow-color: #dc3545;
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -45,15 +47,29 @@
             flex-direction: column;
             gap: 20px; width: 100%; max-width: 1800px;
         }
-        .info-cards-row {
+        .info-cards-row, .path-trace-row {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
             gap: 20px;
+            width: 100%;
         }
+        .info-cards-row {
+            grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+        }
+        .path-trace-row {
+             grid-template-columns: repeat(auto-fit, minmax(calc(50% - 10px), 1fr));
+        }
+         @media (max-width: 1200px) {
+            .path-trace-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+
         .leg-cards-grid-container {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
             gap: 20px;
+            width: 100%;
         }
         .grid-card {
             background-color: #ffffff; border: 1px solid var(--border-color);
@@ -65,13 +81,31 @@
         .grid-card h3 { font-size: 0.9em; font-weight: 500; margin-top: 10px; margin-bottom: 5px; color: var(--text-color); }
 
         .esp-info-card .dmp-section { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom:10px; }
-        .dmp-canvas-container { /* Renamed from imu-canvas-container */
+        .dmp-canvas-container {
             width: 450px; height: 450px; border: 1px solid var(--border-color);
             background-color: #f0f0f0; margin-bottom: 5px;
             margin-left: auto; margin-right: auto;
         }
         .dmp-text-data p { margin: 2px 0; font-size: 0.85em; color: var(--text-muted-color); text-align: center; }
         .dmp-text-data p strong { color: var(--text-color); font-weight: 500;}
+
+        .path-trace-card {
+            min-height: 500px;
+        }
+        .path-trace-section { margin-top: 10px; display: flex; flex-direction: column; align-items: center; flex-grow: 1;}
+        .path-trace-canvas-container {
+            width: 98%;
+            flex-grow: 1;
+            border: 1px solid var(--border-color);
+            background-color: #f8f8f8;
+            margin-bottom: 10px;
+            position: relative;
+            min-height: 400px;
+        }
+        .path-trace-canvas-container canvas { display: block; width: 100%; height: 100%;}
+        .path-trace-controls { display: flex; justify-content: space-between; width: 98%; margin-bottom: 5px; align-items: center;}
+        .path-trace-info { width: 98%; text-align: center; }
+        .path-trace-info p { margin: 2px 0; font-size: 0.8em; color: var(--text-muted-color); }
 
 
         .data-age-card h2, .leg-card h2 { display: flex; justify-content: space-between; align-items: center; }
@@ -117,10 +151,10 @@
         <div class="info-cards-row">
             <div id="esp0-column" class="grid-card esp-info-card" style="display:none;">
                 <h2>ESP 1 (<span id="esp0-ip">-</span>) <span id="esp0-data-status" class="status-dot"></span></h2>
-                <div id="esp0-dmp-section" class="dmp-section" style="display:none;"> <!-- Renamed class -->
+                <div id="esp0-dmp-section" class="dmp-section" style="display:none;">
                     <h3>DMP Orientation & Data</h3>
-                    <div id="dmpCubeContainer-esp0" class="dmp-canvas-container"></div> <!-- Renamed ID and class -->
-                    <div id="esp0-dmp-text" class="dmp-text-data"></div> <!-- Renamed ID and class -->
+                    <div id="dmpCubeContainer-esp0" class="dmp-canvas-container"></div>
+                    <div id="esp0-dmp-text" class="dmp-text-data"></div>
                 </div>
                 <div class="data-age-section">
                     <h3>Data Freshness <span id="esp0-data-age-value" class="current-value-display">(- ms)</span></h3>
@@ -129,10 +163,10 @@
             </div>
             <div id="esp1-column" class="grid-card esp-info-card" style="display:none;">
                 <h2>ESP 2 (<span id="esp1-ip">-</span>) <span id="esp1-data-status" class="status-dot"></span></h2>
-                <div id="esp1-dmp-section" class="dmp-section" style="display:none;"> <!-- Renamed class -->
+                <div id="esp1-dmp-section" class="dmp-section" style="display:none;">
                     <h3>DMP Orientation & Data</h3>
-                    <div id="dmpCubeContainer-esp1" class="dmp-canvas-container"></div> <!-- Renamed ID and class -->
-                    <div id="esp1-dmp-text" class="dmp-text-data"></div> <!-- Renamed ID and class -->
+                    <div id="dmpCubeContainer-esp1" class="dmp-canvas-container"></div>
+                    <div id="esp1-dmp-text" class="dmp-text-data"></div>
                 </div>
                  <div class="data-age-section">
                     <h3>Data Freshness <span id="esp1-data-age-value" class="current-value-display">(- ms)</span></h3>
@@ -144,6 +178,39 @@
                 <div class="chart-container"><canvas id="uiUpdateIntervalChart"></canvas></div>
             </div>
         </div>
+
+        <div class="path-trace-row">
+            <div id="esp0-path-trace-card" class="grid-card path-trace-card" style="display:none;">
+                <h2>ESP 1 Path Trace</h2>
+                <div id="esp0-path-trace-section" class="path-trace-section">
+                    <div class="path-trace-controls">
+                        <button id="resetPathBtn-esp0" class="control-button" style="padding: 5px 10px; font-size: 0.8em;">Reset Path</button>
+                        <span style="font-size:0.8em;">Scale (px/m): <input type="number" id="pathScale-esp0" value="200" min="10" max="1000" step="10" style="width:60px; padding: 3px;"></span>
+                        <span style="font-size:0.8em;">Last Update: <span id="pathLastUpdate-esp0">-</span></span>
+                    </div>
+                    <div id="pathTraceCanvasContainer-esp0" class="path-trace-canvas-container">
+                        <canvas id="pathTraceCanvas-esp0"></canvas>
+                    </div>
+                    <div id="esp0-path-info" class="path-trace-info"></div>
+                </div>
+            </div>
+            <div id="esp1-path-trace-card" class="grid-card path-trace-card" style="display:none;">
+                 <h2>ESP 2 Path Trace</h2>
+                <div id="esp1-path-trace-section" class="path-trace-section">
+                     <div class="path-trace-controls">
+                        <button id="resetPathBtn-esp1" class="control-button" style="padding: 5px 10px; font-size: 0.8em;">Reset Path</button>
+                        <span style="font-size:0.8em;">Scale (px/m): <input type="number" id="pathScale-esp1" value="200" min="10" max="1000" step="10" style="width:60px; padding: 3px;"></span>
+                        <span style="font-size:0.8em;">Last Update: <span id="pathLastUpdate-esp1">-</span></span>
+                    </div>
+                    <div id="pathTraceCanvasContainer-esp1" class="path-trace-canvas-container">
+                        <canvas id="pathTraceCanvas-esp1"></canvas>
+                    </div>
+                    <div id="esp1-path-info" class="path-trace-info"></div>
+                </div>
+            </div>
+        </div>
+
+
         <div class="leg-cards-grid-container layout-2x2" id="leg-cards-grid-container">
         </div>
     </div>
@@ -168,9 +235,11 @@
         let uiUpdateIntervalChart;
         let espDataAgeCharts = {};
         let motorAngleCharts = {};
-        let dmpVisualizers = {}; // Changed from imuVisualizers
+        let dmpVisualizers = {};
         let currentMotorTargetAngles = new Array(numMotors > 0 ? numMotors : 8).fill(0.0);
         let clientSideControlEnabled = false;
+
+        let pathTracers = {};
 
         if (motorSelectEl && motorConfigListFromPython && motorConfigListFromPython.length > 0) { motorConfigListFromPython.forEach(motor => { const option = document.createElement('option'); option.value = motor.id; option.textContent = `${motor.name} (ID ${motor.id})`; motorSelectEl.appendChild(option); }); } else { console.warn("Motor select not populated."); }
 
@@ -187,6 +256,8 @@
             createEspDataAgeChart('esp0');
             createEspDataAgeChart('esp1');
             try { setupMotorAngleCharts(motorConfigListFromPython, legsOrderFromPython); } catch (e) { console.error("Err Motor Charts:", e); }
+            setupPathTracer('esp0');
+            setupPathTracer('esp1');
         });
 
         socket.on('command_status', (data) => {
@@ -200,6 +271,7 @@
         });
 
         let lastDataReceiveTime = performance.now();
+
         socket.on('robot_data_update', (data) => {
             const now = performance.now(); const interval = now - lastDataReceiveTime; lastDataReceiveTime = now;
             if (uiUpdateIntervalChart) { updateChart(uiUpdateIntervalChart, interval); }
@@ -207,7 +279,7 @@
             const lastUpdateEl = document.getElementById('last-update-time'); const date = new Date(data.timestamp * 1000);
             if (lastUpdateEl) lastUpdateEl.textContent = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             if (data.hasOwnProperty('control_enabled_server_state')) { clientSideControlEnabled = data.control_enabled_server_state; updateToggleButtonText(); }
-            try { updateDashboardUI(data); } catch (e) { console.error("Error in updateDashboardUI:", e, "Data:", data); }
+            try { updateDashboardUI(data, now); } catch (e) { console.error("Error in updateDashboardUI:", e, "Data:", data); }
         });
 
 
@@ -219,14 +291,39 @@
 
         function updateToggleButtonText() { if (toggleControlBtn) { if (clientSideControlEnabled) { toggleControlBtn.innerHTML = '<span class="icon">🚫</span>Disable Control'; } else { toggleControlBtn.innerHTML = '<span class="icon">⚡</span>Enable Control'; } } }
 
-        function chartOptions(custom = {}) { return { responsive: true, maintainAspectRatio: false, animation: false, scales: { y: { suggestedMin: custom.yMin, suggestedMax: custom.yMax, title: { display: !!custom.yLabel, text: custom.yLabel, color: 'var(--text-muted-color)'}, ticks: { color: 'var(--text-muted-color)', font: {size: 10} }, grid: { color: 'var(--graph-grid-color)' } }, x: { display: false, grid: { color: 'var(--graph-grid-color)' } } }, plugins: { legend: { display: false }, title: { display: true, text: custom.titleText || '', color: 'var(--text-color)', font: {size: 12, weight: '500'}, padding: { top:0, bottom:5}, align: 'start' } } }; }
+        // MODIFIED: Charts will use blue lines
+        function chartOptions(custom = {}) {
+            return {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                scales: {
+                    y: { suggestedMin: custom.yMin, suggestedMax: custom.yMax, title: { display: !!custom.yLabel, text: custom.yLabel, color: 'var(--text-muted-color)'}, ticks: { color: 'var(--text-muted-color)', font: {size: 10} }, grid: { color: 'var(--graph-grid-color)' } },
+                    x: { display: false, grid: { color: 'var(--graph-grid-color)' } }
+                },
+                plugins: {
+                    legend: { display: false },
+                    title: { display: true, text: custom.titleText || '', color: 'var(--text-color)', font: {size: 12, weight: '500'}, padding: { top:0, bottom:5}, align: 'start' }
+                }
+            };
+        }
+
+        function getChartDatasetDefaults() {
+            return {
+                data: [],
+                borderColor: getCssVariableValue('--graph-line-color'), // This uses the CSS var which is now blue
+                borderWidth: 1.5, // Keep this reasonable
+                pointRadius: 0,
+                tension: 0.3,
+                fill: false
+            };
+        }
+
 
         function setupUiUpdateIntervalChart() {
             const canvasEl = document.getElementById('uiUpdateIntervalChart');
             if (!canvasEl) { console.error("uiUpdateIntervalChart canvas not found!"); return; }
             const ctx = canvasEl.getContext('2d');
             uiUpdateIntervalChart = new Chart(ctx, {
-                type: 'line', data: { labels: [], datasets: [{ data: [], borderColor: getCssVariableValue('--graph-line-color'), borderWidth: 1.5, pointRadius: 0, tension: 0.3, fill: false }] },
+                type: 'line', data: { labels: [], datasets: [getChartDatasetDefaults()] },
                 options: chartOptions({ yMin: 0, yMax: 200, titleText: ' ' })
             });
         }
@@ -238,33 +335,22 @@
             const ctx = canvasEl.getContext('2d');
             espDataAgeCharts[espIdString] = new Chart(ctx, {
                 type: 'line',
-                data: { labels: [], datasets: [{ data: [], borderColor: getCssVariableValue('--graph-line-color'), borderWidth: 1.5, pointRadius: 0, tension: 0.3, fill: false }] },
+                data: { labels: [], datasets: [getChartDatasetDefaults()] },
                 options: chartOptions({ yMin: 0, yMax: 500, titleText: ` ` })
             });
         }
 
         function setupMotorAngleCharts(motors, legsOrderToUse) {
+            // ... (Motor chart setup remains the same, but will use getChartDatasetDefaults)
             if (!motors || !legsOrderToUse || !legCardsContainer) { console.error("Missing data for motor chart setup or leg container not found."); return; }
             legCardsContainer.innerHTML = '';
             motorAngleCharts = {};
-
             const legOrderMap = { "FL": 0, "FR": 1, "BL": 2, "BR": 3 };
-            const sortedLegsOrder = legsOrderToUse.slice().sort((a, b) => {
-                const nameA = a.toUpperCase().replace(" LEG", "");
-                const nameB = b.toUpperCase().replace(" LEG", "");
-                return (legOrderMap[nameA] ?? 99) - (legOrderMap[nameB] ?? 99);
-            });
-
-            if (sortedLegsOrder.length === 4 && legCardsContainer.classList.contains('layout-2x2')) {
-                 console.log("Applying 2x2 layout for 4 legs.");
-            } else {
-                legCardsContainer.classList.remove('layout-2x2');
-                console.log("Using auto-fit layout for legs.");
-            }
-
+            const sortedLegsOrder = legsOrderToUse.slice().sort((a, b) => (legOrderMap[a.toUpperCase().replace(" LEG", "")] ?? 99) - (legOrderMap[b.toUpperCase().replace(" LEG", "")] ?? 99));
+            if (sortedLegsOrder.length === 4 && legCardsContainer.classList.contains('layout-2x2')) {} else { legCardsContainer.classList.remove('layout-2x2'); }
             sortedLegsOrder.forEach(legName => {
                 const legCard = document.createElement('div'); legCard.classList.add('grid-card', 'leg-card'); legCard.id = `leg-card-${legName.toLowerCase().replace(/\s+/g, '-')}`;
-                legCard.innerHTML = `<h2>${legName} <span class="current-value-display">(Enc / Tgt / Angle °)</span></h2><div class="motor-leg-charts-container"></div>`; // Updated subtitle
+                legCard.innerHTML = `<h2>${legName} <span class="current-value-display">(Enc / Tgt / Angle °)</span></h2><div class="motor-leg-charts-container"></div>`;
                 legCardsContainer.appendChild(legCard);
                 const legChartContainer = legCard.querySelector('.motor-leg-charts-container');
                 if (!legChartContainer) { console.error(`No .motor-leg-charts-container in ${legName}`); return; }
@@ -273,9 +359,10 @@
                     const canvas = document.createElement('canvas'); chartItemDiv.appendChild(canvas); legChartContainer.appendChild(chartItemDiv);
                     const ctx = canvas.getContext('2d');
                     motorAngleCharts[motor.id] = new Chart(ctx, { type: 'line',
-                        data: { labels: [], datasets: [{ data: [], borderColor: getCssVariableValue('--graph-line-color'), borderWidth: 1.5, pointRadius: 0, tension: 0.3, fill: false }] },
-                        options: chartOptions({ yMin: -120, yMax: 120, titleText: `${motor.name}: 0.0° (E:0 / T:0)` }) }); }); }); // Updated title format
+                        data: { labels: [], datasets: [getChartDatasetDefaults()] },
+                        options: chartOptions({ yMin: -120, yMax: 120, titleText: `${motor.name}: 0.0° (E:0 / T:0)` }) }); }); });
         }
+
 
         function updateChart(chart, newData, newTitleText = null) { if (!chart || !chart.data) { return; } chart.data.labels.push(''); chart.data.datasets[0].data.push(newData); if (chart.data.labels.length > MAX_CHART_POINTS) { chart.data.labels.shift(); chart.data.datasets[0].data.shift(); } if (newTitleText && chart.options.plugins.title) { chart.options.plugins.title.text = newTitleText; } chart.update('none'); }
 
@@ -297,7 +384,7 @@
             return sprite;
         }
 
-        function createDMPVisualizer(containerElement, espId) { // Renamed from createIMUVisualizer
+        function createDMPVisualizer(containerElement, espId) {
             if (!containerElement || dmpVisualizers[espId]) return;
             const scene = new THREE.Scene();
             scene.background = new THREE.Color(0xf0f0f0);
@@ -306,14 +393,12 @@
             renderer.setSize(containerElement.clientWidth, containerElement.clientHeight);
             containerElement.innerHTML = '';
             containerElement.appendChild(renderer.domElement);
-            const geometry = new THREE.BoxGeometry(1.2, 0.4, 1.6); // X, Y, Z dimensions of the box
+            const geometry = new THREE.BoxGeometry(1.2, 0.4, 1.6);
             const material = new THREE.MeshNormalMaterial({transparent:true, opacity:0.95});
             const cube = new THREE.Mesh(geometry, material);
             scene.add(cube);
-
             const axesHelper = new THREE.AxesHelper(1.5);
             scene.add(axesHelper);
-
             const labelDist = 1.5 * 1.1; const labelOffset = 0.15;
             const xLabel = createAxisTextSprite('X', { r:255, g:0, b:0, a:1.0 });
             xLabel.position.set(labelDist, labelOffset, 0); scene.add(xLabel);
@@ -321,62 +406,292 @@
             yLabel.position.set(labelOffset, labelDist, 0); scene.add(yLabel);
             const zLabel = createAxisTextSprite('Z', { r:0, g:0, b:255, a:1.0 });
             zLabel.position.set(0, labelOffset, labelDist); scene.add(zLabel);
-
             camera.position.set(2.44, 1.63, 4.35); camera.lookAt(0,0,0);
-            dmpVisualizers[espId] = { cube, renderer, scene, camera, xLabel, yLabel, zLabel }; // Changed from imuVisualizers
-
+            dmpVisualizers[espId] = { cube, renderer, scene, camera, xLabel, yLabel, zLabel };
             camera.aspect = containerElement.clientWidth / containerElement.clientHeight;
             camera.updateProjectionMatrix();
-
             function animate() {
-                if (!dmpVisualizers[espId]) return; // Changed from imuVisualizers
+                if (!dmpVisualizers[espId]) return;
                 requestAnimationFrame(animate);
-                dmpVisualizers[espId].renderer.render(dmpVisualizers[espId].scene, dmpVisualizers[espId].camera); // Changed from imuVisualizers
+                dmpVisualizers[espId].renderer.render(dmpVisualizers[espId].scene, dmpVisualizers[espId].camera);
             }
             animate();
         }
 
-        // MODIFIED updateDMPCube to use quaternion directly
         function updateDMPCube(espId, dmpDataFromPython) {
             const visualizer = dmpVisualizers[espId];
             if (!visualizer || !visualizer.cube || !dmpDataFromPython || !dmpDataFromPython.ypr_deg) {
                 return;
             }
-
             const ypr = dmpDataFromPython.ypr_deg;
-
             let mpuYawDeg = parseFloat(ypr.yaw);
             let mpuPitchDeg = parseFloat(ypr.pitch);
             let mpuRollDeg = parseFloat(ypr.roll);
-
             if (isNaN(mpuYawDeg)) mpuYawDeg = 0;
             if (isNaN(mpuPitchDeg)) mpuPitchDeg = 0;
             if (isNaN(mpuRollDeg)) mpuRollDeg = 0;
-
             const mpuYawRad = THREE.MathUtils.degToRad(mpuYawDeg);
             const mpuPitchRad = THREE.MathUtils.degToRad(mpuPitchDeg);
             const mpuRollRad = THREE.MathUtils.degToRad(mpuRollDeg);
-
-            visualizer.cube.rotation.order = 'YXZ'; 
-
-            visualizer.cube.rotation.y = -mpuYawRad;
-            visualizer.cube.rotation.x = -mpuPitchRad; // Inverted MPU Pitch for visual X-axis
+            visualizer.cube.rotation.order = 'YXZ';
+            visualizer.cube.rotation.y = mpuYawRad;
+            visualizer.cube.rotation.x = -mpuPitchRad;
             visualizer.cube.rotation.z = mpuRollRad;
         }
 
-        function updateDashboardUI(data) {
+        function setupPathTracer(espIdString) {
+            const pathCard = document.getElementById(`${espIdString}-path-trace-card`);
+            const canvasContainer = document.getElementById(`pathTraceCanvasContainer-${espIdString}`);
+            const canvas = document.getElementById(`pathTraceCanvas-${espIdString}`);
+            const resetButton = document.getElementById(`resetPathBtn-${espIdString}`);
+            const scaleInput = document.getElementById(`pathScale-${espIdString}`);
+
+            if (!canvas || !canvasContainer || !pathCard) {
+                console.warn(`Path tracer elements for ${espIdString} not found.`);
+                return;
+            }
+            pathCard.style.display = 'flex';
+
+            const ctx = canvas.getContext('2d');
+            const rect = canvasContainer.getBoundingClientRect();
+            const baseWidth = rect.width > 100 ? rect.width : 600; // Ensure a minimum base width
+            const baseHeight = rect.height > 100 ? rect.height : 450;
+
+            canvas.width = baseWidth * 2;
+            canvas.height = baseHeight * 2;
+
+            const initialScale = parseInt(scaleInput.value) || 200; // Default to 200 if input is bad
+
+            const pathTracer = {
+                ctx: ctx,
+                canvas: canvas,
+                pathPoints: [{x: canvas.width / 2, y: canvas.height / 2}],
+                currentX: canvas.width / 2,
+                currentY: canvas.height / 2,
+                currentYawRad: -Math.PI / 2, // Start pointing UP (towards negative Y canvas)
+                velocityX: 0,
+                velocityY: 0,
+                totalDistance: 0,
+                maxPathPoints: 300,
+                scale: initialScale, // Pixels per meter for hi-res canvas
+                gridSize: 100,  // Grid size on hi-res canvas (looks like 50px on display)
+                arrowSize: 60, // Arrow size on hi-res canvas (looks like 30px on display)
+                lastUpdateTime: 0
+            };
+            pathTracers[espIdString] = pathTracer;
+
+            if (resetButton) {
+                resetButton.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    resetPath(espIdString);
+                });
+            }
+            if (scaleInput) {
+                scaleInput.addEventListener('change', (e) => {
+                    const newScale = parseInt(e.target.value);
+                    if (!isNaN(newScale) && newScale >= 10) {
+                        if (pathTracers[espIdString]) { // Check if tracer exists
+                           pathTracers[espIdString].scale = newScale; // Update the scale
+                           // No need to reset path on scale change, just redraw with new scale interpretation next frame
+                           // but current implementation would require a reset to see effect on existing path.
+                           // For simplicity, let's force a reset to apply new scale cleanly.
+                           resetPath(espIdString);
+                        }
+                    }
+                });
+            }
+            drawPathTrace(espIdString);
+        }
+
+        function resetPath(espIdString) {
+            const tracer = pathTracers[espIdString];
+            if (!tracer) return;
+            const canvasContainer = document.getElementById(`pathTraceCanvasContainer-${espIdString}`);
+            const scaleInput = document.getElementById(`pathScale-${espIdString}`);
+
+            if (canvasContainer) {
+                 const rect = canvasContainer.getBoundingClientRect();
+                 const baseWidth = rect.width > 100 ? rect.width : 600;
+                 const baseHeight = rect.height > 100 ? rect.height : 450;
+                 tracer.canvas.width = baseWidth * 2;
+                 tracer.canvas.height = baseHeight * 2;
+            }
+            if (scaleInput) {
+                tracer.scale = parseInt(scaleInput.value) || 200; // Use current input value or default
+            }
+
+            tracer.currentX = tracer.canvas.width / 2;
+            tracer.currentY = tracer.canvas.height / 2;
+            tracer.pathPoints = [{x: tracer.currentX, y: tracer.currentY}];
+            tracer.velocityX = 0;
+            tracer.velocityY = 0;
+            tracer.totalDistance = 0;
+            tracer.currentYawRad = -Math.PI / 2; // Reset to pointing UP
+            tracer.lastUpdateTime = 0;
+            drawPathTrace(espIdString);
+            const pathInfoEl = document.getElementById(`${espIdString}-path-info`);
+            if(pathInfoEl) pathInfoEl.innerHTML = `<p>Dist: 0.00 m | Speed: 0.00 m/s</p>`;
+        }
+
+        function drawPathTrace(espIdString) {
+            const tracer = pathTracers[espIdString];
+            if (!tracer || !tracer.ctx || tracer.canvas.width === 0 || tracer.canvas.height === 0) return;
+
+            const { ctx, canvas, pathPoints, currentX, currentY, currentYawRad, gridSize, arrowSize } = tracer;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.strokeStyle = getCssVariableValue('--graph-grid-color');
+            ctx.lineWidth = 2; // Was 1, increased for visibility on hi-res
+            const offsetX = currentX % gridSize;
+            const offsetY = currentY % gridSize;
+
+            for (let x = -offsetX; x < canvas.width; x += gridSize) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+            }
+            for (let y = -offsetY; y < canvas.height; y += gridSize) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+            }
+
+            ctx.save();
+            ctx.translate(canvas.width / 2 - currentX, canvas.height / 2 - currentY);
+
+            if (pathPoints.length > 1) {
+                ctx.beginPath();
+                ctx.moveTo(pathPoints[0].x, pathPoints[0].y);
+                for (let i = 1; i < pathPoints.length; i++) {
+                    ctx.lineTo(pathPoints[i].x, pathPoints[i].y);
+                }
+                ctx.strokeStyle = getCssVariableValue('--path-color');
+                ctx.lineWidth = 8; // Was 4, increased for visibility
+                ctx.stroke();
+            }
+            ctx.restore();
+
+            ctx.save();
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.rotate(currentYawRad); // Arrow rotation is directly currentYawRad if yaw=0 points right
+                                      // If yaw=0 should point UP, then currentYawRad - Math.PI/2
+
+            ctx.beginPath();
+            ctx.moveTo(arrowSize * 0.7, 0); // Tip of arrow (points along +X before rotation)
+            ctx.lineTo(-arrowSize * 0.3, -arrowSize * 0.5);
+            ctx.lineTo(-arrowSize * 0.1, 0); // Mid-base
+            ctx.lineTo(-arrowSize * 0.3, arrowSize * 0.5);
+            ctx.closePath();
+            ctx.fillStyle = getCssVariableValue('--arrow-color');
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function updatePathTracer(espIdString, dmpData, currentTime) {
+            const tracer = pathTracers[espIdString];
+            const pathCardEl = document.getElementById(`${espIdString}-path-trace-card`);
+            const pathLastUpdateEl = document.getElementById(`pathLastUpdate-${espIdString}`);
+            const pathInfoEl = document.getElementById(`${espIdString}-path-info`);
+
+            if (!tracer || !dmpData || !dmpData.world_accel_mps2 || !dmpData.ypr_deg) {
+                if(pathCardEl) pathCardEl.style.display = 'none';
+                return;
+            }
+             if(pathCardEl) pathCardEl.style.display = 'flex';
+
+
+            if (tracer.lastUpdateTime === 0) {
+                tracer.lastUpdateTime = currentTime;
+                // Set initial yaw based on current DMP data if available, otherwise default
+                let initialYawDeg = parseFloat(dmpData.ypr_deg.yaw) || 0;
+                tracer.currentYawRad = THREE.MathUtils.degToRad(initialYawDeg) - Math.PI / 2; // Point UP initially
+                return;
+            }
+
+            const dt = (currentTime - tracer.lastUpdateTime) / 1000.0;
+            if (dt <= 0.001) return;
+            tracer.lastUpdateTime = currentTime;
+
+            if (pathLastUpdateEl) pathLastUpdateEl.textContent = new Date(currentTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+            const accel = dmpData.world_accel_mps2;
+            const ypr = dmpData.ypr_deg;
+
+            let dmp_world_ax = parseFloat(accel.ax) || 0; // Assume this is DMP's X-world
+            let dmp_world_ay = parseFloat(accel.ay) || 0; // Assume this is DMP's Y-world
+            let yawDeg = parseFloat(ypr.yaw) || 0;
+            // Update currentYawRad: Robot yaw=0 points UP (-Y canvas), positive yaw is CCW
+            tracer.currentYawRad = THREE.MathUtils.degToRad(yawDeg) - (Math.PI / 2);
+
+
+            const accelThreshold = 0.05;
+            if (Math.abs(dmp_world_ax) < accelThreshold) dmp_world_ax = 0;
+            if (Math.abs(dmp_world_ay) < accelThreshold) dmp_world_ay = 0;
+
+            // AXIS MAPPING FOR ACCELERATION
+            // Goal: Robot "forward" (what DMP considers its X-axis movement in world frame) should move path UP on canvas.
+            // Robot "strafe left" (what DMP considers its Y-axis movement in world frame, if Y is left) should move path LEFT on canvas.
+
+            // Canvas X+ is Right, Y+ is Down.
+            // DMP World X (dmp_world_ax) -> Mapped to Canvas Y (UP is negative)
+            // DMP World Y (dmp_world_ay) -> Mapped to Canvas X (LEFT is negative)
+
+            let canvas_frame_accel_x = dmp_world_ay;  // If DMP Y is "strafe left", positive ay makes canvas_frame_accel_x positive (right).
+                                                    // To make it "left" on canvas, this should be -dmp_world_ay.
+            let canvas_frame_accel_y = -dmp_world_ax; // If DMP X is "forward", positive ax makes canvas_frame_accel_y negative (up). This is correct.
+
+            // Correcting based on "Z-axis (forward movement) inverted" -> "when i move forward it graphs it down"
+            // "Forward" is likely dmp_world_ax. If it graphs down (positive canvas_y), then current -dmp_world_ax is correct if dmp_world_ax positive means forward.
+            // The problem was likely the arrow pointing right by default.
+
+            // IF "moving in y generates x movement" was true (DMP.ay controls canvas.x):
+            // AND if moving physically "left" (positive DMP.ay) should make canvas path go "left" (negative canvas.x)
+            // THEN: canvas_frame_accel_x = -dmp_world_ay;
+            canvas_frame_accel_x = -dmp_world_ay; // Assuming positive dmp_world_ay is physically left, want canvas to move left.
+
+            tracer.velocityX += canvas_frame_accel_x * dt;
+            tracer.velocityY += canvas_frame_accel_y * dt;
+
+            const dampingFactor = 0.7;
+            tracer.velocityX *= Math.pow((1 - dampingFactor), dt);
+            tracer.velocityY *= Math.pow((1 - dampingFactor), dt);
+
+            const dx_meters = tracer.velocityX * dt;
+            const dy_meters = tracer.velocityY * dt;
+
+            tracer.currentX += dx_meters * tracer.scale;
+            tracer.currentY += dy_meters * tracer.scale;
+
+            const distMovedPixels = Math.sqrt(Math.pow(dx_meters * tracer.scale, 2) + Math.pow(dy_meters * tracer.scale, 2));
+            if (distMovedPixels > 2.0) { // Threshold for hi-res
+                 tracer.pathPoints.push({x: tracer.currentX, y: tracer.currentY});
+                 if (tracer.pathPoints.length > tracer.maxPathPoints) {
+                    tracer.pathPoints.shift();
+                }
+            }
+
+            tracer.totalDistance += Math.sqrt(dx_meters * dx_meters + dy_meters * dy_meters);
+            const currentSpeed = Math.sqrt(tracer.velocityX*tracer.velocityX + tracer.velocityY*tracer.velocityY);
+
+            if (pathInfoEl) {
+                pathInfoEl.innerHTML = `<p>Dist: ${tracer.totalDistance.toFixed(2)}m | Speed: ${currentSpeed.toFixed(2)} m/s </p>`;
+            }
+            drawPathTrace(espIdString);
+        }
+
+        function updateDashboardUI(data, currentTime) {
             data.esps.forEach((esp, espIndex) => {
                 const espIdString = `esp${espIndex}`;
                 const espCardEl = document.getElementById(`${espIdString}-column`);
+                const pathCardEl = document.getElementById(`${espIdString}-path-trace-card`);
+
                 const espIpEl = document.getElementById(`${espIdString}-ip`);
                 const espDataStatusEl = document.getElementById(`${espIdString}-data-status`);
-                const dmpSectionEl = document.getElementById(`${espIdString}-dmp-section`); // Renamed
-                const dmpTextEl = document.getElementById(`${espIdString}-dmp-text`);       // Renamed
+                const dmpSectionEl = document.getElementById(`${espIdString}-dmp-section`);
+                const dmpTextEl = document.getElementById(`${espIdString}-dmp-text`);
                 const espDataAgeValueEl = document.getElementById(`${espIdString}-data-age-value`);
 
-                if (!espCardEl) { console.warn(`ESP card for ${espIdString} not found.`); return;  }
 
-                espCardEl.style.display = 'flex';
+                if (espCardEl) espCardEl.style.display = 'flex';
+                // Path card visibility handled by updatePathTracer now
+
                 if (espIpEl) espIpEl.textContent = esp.ip;
                 if (espDataStatusEl) espDataStatusEl.style.backgroundColor = esp.data_available ? 'var(--success-color)' : 'var(--error-color)';
 
@@ -388,40 +703,42 @@
                     if (espDataAgeValueEl) espDataAgeValueEl.textContent = `(${esp.data_age_ms > 0 ? esp.data_age_ms.toFixed(0) : '-'} ms)`;
                 } else {
                      if (espDataAgeValueEl) espDataAgeValueEl.textContent = `(N/A)`;
+                     if (pathCardEl) pathCardEl.style.display = 'none';
                 }
 
-                // --- DMP Data Display ---
-                if (esp.data_available && esp.dmp_ready) { // Check dmp_ready
+                if (esp.data_available && esp.dmp_ready) {
                     if(dmpSectionEl) dmpSectionEl.style.display = 'flex';
-                    const dmpCubeContainer = document.getElementById(`dmpCubeContainer-${espIdString}`); // Renamed
-                    if (dmpCubeContainer && !dmpVisualizers[espIdString]) { // Changed from imuVisualizers
-                        createDMPVisualizer(dmpCubeContainer, espIdString); // Renamed
+                    const dmpCubeContainer = document.getElementById(`dmpCubeContainer-${espIdString}`);
+                    if (dmpCubeContainer && !dmpVisualizers[espIdString]) {
+                        createDMPVisualizer(dmpCubeContainer, espIdString);
                     }
-                    if (dmpVisualizers[espIdString] && esp.dmp_data) { // Changed from imuVisualizers
-                        updateDMPCube(espIdString, esp.dmp_data); // Pass the whole dmp_data object
+                    if (dmpVisualizers[espIdString] && esp.dmp_data) {
+                        updateDMPCube(espIdString, esp.dmp_data);
                     }
 
-                    if(dmpTextEl && esp.dmp_data) { // Check esp.dmp_data exists
+                    if(dmpTextEl && esp.dmp_data) {
                         let textContent = `<p><strong>DMP Status:</strong> READY</p>`;
                         const quat = esp.dmp_data.quaternion || {};
                         const accel = esp.dmp_data.world_accel_mps2 || {};
                         const ypr = esp.dmp_data.ypr_deg || {};
-
                         textContent += `<p><strong>Quat:</strong> W:${(quat.w||0).toFixed(2)}, X:${(quat.x||0).toFixed(2)}, Y:${(quat.y||0).toFixed(2)}, Z:${(quat.z||0).toFixed(2)}</p>`;
                         textContent += `<p><strong>World Accel (m/s²):</strong> AX:${(accel.ax||0).toFixed(2)}, AY:${(accel.ay||0).toFixed(2)}, AZ:${(accel.az||0).toFixed(2)}</p>`;
                         textContent += `<p><strong>YPR (deg):</strong> Yaw:${(ypr.yaw||0).toFixed(1)}, Pitch:${(ypr.pitch||0).toFixed(1)}, Roll:${(ypr.roll||0).toFixed(1)}</p>`;
                         dmpTextEl.innerHTML = textContent;
                     }
+                    if (pathTracers[espIdString] && esp.dmp_data) {
+                        updatePathTracer(espIdString, esp.dmp_data, currentTime);
+                    }
+
                 } else {
                     if(dmpSectionEl) dmpSectionEl.style.display = 'none';
                     if(dmpTextEl) dmpTextEl.innerHTML = `<p><strong>DMP Status:</strong> ${esp.data_available ? 'NOT READY' : 'NO DATA'}</p>`;
+                    if (pathCardEl) pathCardEl.style.display = 'none';
                 }
-                // --- End DMP Data Display ---
 
 
                 esp.motors.forEach(motor => {
                     if (motorAngleCharts[motor.id]) {
-                        // Display Angle, Encoder Position, and Target Position in chart title
                         const encPos = motor.encoderPos !== undefined ? motor.encoderPos : 'N/A';
                         const tgtPos = motor.targetPos !== undefined ? motor.targetPos : 'N/A';
                         const angle = motor.angle !== undefined ? motor.angle.toFixed(1) : 'N/A';
@@ -432,7 +749,6 @@
                 });
             });
         }
-
         updateToggleButtonText();
     </script>
 </body>
