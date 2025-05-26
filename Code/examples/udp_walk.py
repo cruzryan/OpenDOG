@@ -70,7 +70,6 @@ except json.JSONDecodeError as e:
 except Exception as e:
     print(f"An unexpected error occurred loading '{JSON_WALK_FILE}': {e}. 'W' key will not function.")
 
-
 # --- Initialize QuadPilotBody and Setup ---
 body_controller = None
 initial_setup_successful = False
@@ -80,7 +79,7 @@ try:
     print("QuadPilotBody (command instance) initialized.")
 
     print("Setting initial control parameters...")
-    if not body_controller.set_control_params(P=0.9, I=0.001, D=0.3, dead_zone=10, pos_thresh=5):
+    if not body_controller.set_control_params(P=0.9, I=0.0, D=0.9, dead_zone=5, pos_thresh=5):
         raise Exception("Failed to set control parameters.")
     print("Control parameters set.")
     time.sleep(0.1)

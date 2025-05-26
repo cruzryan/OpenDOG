@@ -185,7 +185,7 @@
                 <div id="esp0-path-trace-section" class="path-trace-section">
                     <div class="path-trace-controls">
                         <button id="resetPathBtn-esp0" class="control-button" style="padding: 5px 10px; font-size: 0.8em;">Reset Path</button>
-                        <span style="font-size:0.8em;">Scale (px/m): <input type="number" id="pathScale-esp0" value="200" min="10" max="1000" step="10" style="width:60px; padding: 3px;"></span>
+                        <span style="font-size:0.8em;">Scale (px/m): <input type="number" id="pathScale-esp0" value="2000" min="10" max="5000" step="10" style="width:60px; padding: 3px;"></span>
                         <span style="font-size:0.8em;">Last Update: <span id="pathLastUpdate-esp0">-</span></span>
                     </div>
                     <div id="pathTraceCanvasContainer-esp0" class="path-trace-canvas-container">
@@ -291,7 +291,6 @@
 
         function updateToggleButtonText() { if (toggleControlBtn) { if (clientSideControlEnabled) { toggleControlBtn.innerHTML = '<span class="icon">🚫</span>Disable Control'; } else { toggleControlBtn.innerHTML = '<span class="icon">⚡</span>Enable Control'; } } }
 
-        // MODIFIED: Charts will use blue lines
         function chartOptions(custom = {}) {
             return {
                 responsive: true, maintainAspectRatio: false, animation: false,
@@ -309,8 +308,8 @@
         function getChartDatasetDefaults() {
             return {
                 data: [],
-                borderColor: getCssVariableValue('--graph-line-color'), // This uses the CSS var which is now blue
-                borderWidth: 1.5, // Keep this reasonable
+                borderColor: getCssVariableValue('--graph-line-color'),
+                borderWidth: 1.5, 
                 pointRadius: 0,
                 tension: 0.3,
                 fill: false
@@ -341,7 +340,6 @@
         }
 
         function setupMotorAngleCharts(motors, legsOrderToUse) {
-            // ... (Motor chart setup remains the same, but will use getChartDatasetDefaults)
             if (!motors || !legsOrderToUse || !legCardsContainer) { console.error("Missing data for motor chart setup or leg container not found."); return; }
             legCardsContainer.innerHTML = '';
             motorAngleCharts = {};
@@ -423,13 +421,21 @@
             if (!visualizer || !visualizer.cube || !dmpDataFromPython || !dmpDataFromPython.ypr_deg) {
                 return;
             }
-            const ypr = dmpDataFromPython.ypr_deg;
-            let mpuYawDeg = parseFloat(ypr.yaw);
-            let mpuPitchDeg = parseFloat(ypr.pitch);
-            let mpuRollDeg = parseFloat(ypr.roll);
+            // Use the smoothed yaw for the cube as well, for consistency with path arrow
+            let yawToUse = dmpDataFromPython.ypr_deg.yaw;
+            const tracer = pathTracers[espId];
+            if(tracer && tracer.emaYaw !== null && tracer.lastUpdateTime !==0) { // Check if emaYaw is initialized
+                yawToUse = tracer.emaYaw;
+            }
+
+            let mpuYawDeg = parseFloat(yawToUse);
+            let mpuPitchDeg = parseFloat(dmpDataFromPython.ypr_deg.pitch); // Keep pitch/roll raw for now
+            let mpuRollDeg = parseFloat(dmpDataFromPython.ypr_deg.roll);
+
             if (isNaN(mpuYawDeg)) mpuYawDeg = 0;
             if (isNaN(mpuPitchDeg)) mpuPitchDeg = 0;
             if (isNaN(mpuRollDeg)) mpuRollDeg = 0;
+
             const mpuYawRad = THREE.MathUtils.degToRad(mpuYawDeg);
             const mpuPitchRad = THREE.MathUtils.degToRad(mpuPitchDeg);
             const mpuRollRad = THREE.MathUtils.degToRad(mpuRollDeg);
@@ -454,13 +460,13 @@
 
             const ctx = canvas.getContext('2d');
             const rect = canvasContainer.getBoundingClientRect();
-            const baseWidth = rect.width > 100 ? rect.width : 600; // Ensure a minimum base width
+            const baseWidth = rect.width > 100 ? rect.width : 600; 
             const baseHeight = rect.height > 100 ? rect.height : 450;
 
             canvas.width = baseWidth * 2;
             canvas.height = baseHeight * 2;
 
-            const initialScale = parseInt(scaleInput.value) || 200; // Default to 200 if input is bad
+            const initialScale = parseInt(scaleInput.value) || 2000; 
 
             const pathTracer = {
                 ctx: ctx,
@@ -468,15 +474,21 @@
                 pathPoints: [{x: canvas.width / 2, y: canvas.height / 2}],
                 currentX: canvas.width / 2,
                 currentY: canvas.height / 2,
-                currentYawRad: -Math.PI / 2, // Start pointing UP (towards negative Y canvas)
+                currentYawRad: -Math.PI / 2, 
                 velocityX: 0,
                 velocityY: 0,
                 totalDistance: 0,
                 maxPathPoints: 300,
-                scale: initialScale, // Pixels per meter for hi-res canvas
-                gridSize: 100,  // Grid size on hi-res canvas (looks like 50px on display)
-                arrowSize: 60, // Arrow size on hi-res canvas (looks like 30px on display)
-                lastUpdateTime: 0
+                scale: initialScale, 
+                gridSize: 100,  
+                arrowSize: 20, 
+                lastUpdateTime: 0,
+                // --- EMA Properties ---
+                emaAx: null, // Will be initialized with the first reading
+                emaAy: null,
+                emaYaw: null,
+                emaAlpha: 0.18, // Tunable: 0.1 (heavy smoothing) to 0.9 (light smoothing)
+                maxExpectedDt: 200 // milliseconds (e.g., 4x expected interval if 50ms interval)
             };
             pathTracers[espIdString] = pathTracer;
 
@@ -490,11 +502,8 @@
                 scaleInput.addEventListener('change', (e) => {
                     const newScale = parseInt(e.target.value);
                     if (!isNaN(newScale) && newScale >= 10) {
-                        if (pathTracers[espIdString]) { // Check if tracer exists
-                           pathTracers[espIdString].scale = newScale; // Update the scale
-                           // No need to reset path on scale change, just redraw with new scale interpretation next frame
-                           // but current implementation would require a reset to see effect on existing path.
-                           // For simplicity, let's force a reset to apply new scale cleanly.
+                        if (pathTracers[espIdString]) { 
+                           pathTracers[espIdString].scale = newScale; 
                            resetPath(espIdString);
                         }
                     }
@@ -517,7 +526,7 @@
                  tracer.canvas.height = baseHeight * 2;
             }
             if (scaleInput) {
-                tracer.scale = parseInt(scaleInput.value) || 200; // Use current input value or default
+                tracer.scale = parseInt(scaleInput.value) || 2000; 
             }
 
             tracer.currentX = tracer.canvas.width / 2;
@@ -526,8 +535,13 @@
             tracer.velocityX = 0;
             tracer.velocityY = 0;
             tracer.totalDistance = 0;
-            tracer.currentYawRad = -Math.PI / 2; // Reset to pointing UP
+            tracer.currentYawRad = -Math.PI / 2; 
             tracer.lastUpdateTime = 0;
+            // --- Reset EMA Values ---
+            tracer.emaAx = null;
+            tracer.emaAy = null;
+            tracer.emaYaw = null;
+
             drawPathTrace(espIdString);
             const pathInfoEl = document.getElementById(`${espIdString}-path-info`);
             if(pathInfoEl) pathInfoEl.innerHTML = `<p>Dist: 0.00 m | Speed: 0.00 m/s</p>`;
@@ -542,7 +556,7 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             ctx.strokeStyle = getCssVariableValue('--graph-grid-color');
-            ctx.lineWidth = 2; // Was 1, increased for visibility on hi-res
+            ctx.lineWidth = 2; 
             const offsetX = currentX % gridSize;
             const offsetY = currentY % gridSize;
 
@@ -563,20 +577,18 @@
                     ctx.lineTo(pathPoints[i].x, pathPoints[i].y);
                 }
                 ctx.strokeStyle = getCssVariableValue('--path-color');
-                ctx.lineWidth = 8; // Was 4, increased for visibility
+                ctx.lineWidth = 8; 
                 ctx.stroke();
             }
             ctx.restore();
 
             ctx.save();
             ctx.translate(canvas.width / 2, canvas.height / 2);
-            ctx.rotate(currentYawRad); // Arrow rotation is directly currentYawRad if yaw=0 points right
-                                      // If yaw=0 should point UP, then currentYawRad - Math.PI/2
-
+            ctx.rotate(currentYawRad); 
             ctx.beginPath();
-            ctx.moveTo(arrowSize * 0.7, 0); // Tip of arrow (points along +X before rotation)
+            ctx.moveTo(arrowSize * 0.7, 0); 
             ctx.lineTo(-arrowSize * 0.3, -arrowSize * 0.5);
-            ctx.lineTo(-arrowSize * 0.1, 0); // Mid-base
+            ctx.lineTo(-arrowSize * 0.1, 0); 
             ctx.lineTo(-arrowSize * 0.3, arrowSize * 0.5);
             ctx.closePath();
             ctx.fillStyle = getCssVariableValue('--arrow-color');
@@ -594,73 +606,78 @@
                 if(pathCardEl) pathCardEl.style.display = 'none';
                 return;
             }
-             if(pathCardEl) pathCardEl.style.display = 'flex';
+            if(pathCardEl) pathCardEl.style.display = 'flex';
 
+            const raw_ax = parseFloat(dmpData.world_accel_mps2.ax) || 0;
+            const raw_ay = parseFloat(dmpData.world_accel_mps2.ay) || 0;
+            const raw_yaw = parseFloat(dmpData.ypr_deg.yaw) || 0;
 
-            if (tracer.lastUpdateTime === 0) {
+            if (tracer.lastUpdateTime === 0) { // First data point
                 tracer.lastUpdateTime = currentTime;
-                // Set initial yaw based on current DMP data if available, otherwise default
-                let initialYawDeg = parseFloat(dmpData.ypr_deg.yaw) || 0;
-                tracer.currentYawRad = THREE.MathUtils.degToRad(initialYawDeg) - Math.PI / 2; // Point UP initially
+                tracer.emaAx = raw_ax;
+                tracer.emaAy = raw_ay;
+                tracer.emaYaw = raw_yaw;
+                tracer.currentYawRad = THREE.MathUtils.degToRad(tracer.emaYaw) - Math.PI / 2; 
                 return;
             }
 
-            const dt = (currentTime - tracer.lastUpdateTime) / 1000.0;
-            if (dt <= 0.001) return;
+            const dt_ms = currentTime - tracer.lastUpdateTime;
+            if (dt_ms <= 1) { // Avoid division by zero or tiny dt
+                // console.warn(`Skipping update due to very small dt: ${dt_ms} ms`);
+                return;
+            }
+            const dt_s = dt_ms / 1000.0;
             tracer.lastUpdateTime = currentTime;
 
             if (pathLastUpdateEl) pathLastUpdateEl.textContent = new Date(currentTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-            const accel = dmpData.world_accel_mps2;
-            const ypr = dmpData.ypr_deg;
-
-            let dmp_world_ax = parseFloat(accel.ax) || 0; // Assume this is DMP's X-world
-            let dmp_world_ay = parseFloat(accel.ay) || 0; // Assume this is DMP's Y-world
-            let yawDeg = parseFloat(ypr.yaw) || 0;
-            // Update currentYawRad: Robot yaw=0 points UP (-Y canvas), positive yaw is CCW
+            // --- EMA Calculation ---
+            tracer.emaAx = (tracer.emaAlpha * raw_ax) + (1 - tracer.emaAlpha) * tracer.emaAx;
+            tracer.emaAy = (tracer.emaAlpha * raw_ay) + (1 - tracer.emaAlpha) * tracer.emaAy;
+            tracer.emaYaw = (tracer.emaAlpha * raw_yaw) + (1 - tracer.emaAlpha) * tracer.emaYaw;
+            // --- End EMA Calculation ---
+            
+            let dmp_world_ax = tracer.emaAx;
+            let dmp_world_ay = tracer.emaAy;
+            let yawDeg = tracer.emaYaw;
+            
             tracer.currentYawRad = THREE.MathUtils.degToRad(yawDeg) - (Math.PI / 2);
 
+            // Heuristic for missing packets / large dt
+            if (dt_ms > tracer.maxExpectedDt) {
+                // console.warn(`Large dt detected: ${dt_ms}ms. Zeroing accelerations for this step.`);
+                dmp_world_ax = 0;
+                dmp_world_ay = 0;
+                // Optionally, also decay velocity more rapidly or reset it
+                // tracer.velocityX *= 0.5; 
+                // tracer.velocityY *= 0.5;
+            }
 
-            const accelThreshold = 0.05;
+            const accelThreshold = 0.1; // Can be tuned. With EMA, this can often be lower.
             if (Math.abs(dmp_world_ax) < accelThreshold) dmp_world_ax = 0;
             if (Math.abs(dmp_world_ay) < accelThreshold) dmp_world_ay = 0;
 
-            // AXIS MAPPING FOR ACCELERATION
-            // Goal: Robot "forward" (what DMP considers its X-axis movement in world frame) should move path UP on canvas.
-            // Robot "strafe left" (what DMP considers its Y-axis movement in world frame, if Y is left) should move path LEFT on canvas.
+            let canvas_frame_accel_x = -dmp_world_ay; 
+            let canvas_frame_accel_y = -dmp_world_ax; 
 
-            // Canvas X+ is Right, Y+ is Down.
-            // DMP World X (dmp_world_ax) -> Mapped to Canvas Y (UP is negative)
-            // DMP World Y (dmp_world_ay) -> Mapped to Canvas X (LEFT is negative)
+            tracer.velocityX += canvas_frame_accel_x * dt_s;
+            tracer.velocityY += canvas_frame_accel_y * dt_s;
 
-            let canvas_frame_accel_x = dmp_world_ay;  // If DMP Y is "strafe left", positive ay makes canvas_frame_accel_x positive (right).
-                                                    // To make it "left" on canvas, this should be -dmp_world_ay.
-            let canvas_frame_accel_y = -dmp_world_ax; // If DMP X is "forward", positive ax makes canvas_frame_accel_y negative (up). This is correct.
+            // Damping factor to prevent runaway velocity due to small persistent noise/bias
+            // and to help settle when accelerations are zeroed after large dt or by threshold.
+            const dampingFactor = 0.9; // Higher means more damping (velocity decays faster)
+            tracer.velocityX *= Math.pow((1 - dampingFactor), dt_s);
+            tracer.velocityY *= Math.pow((1 - dampingFactor), dt_s);
 
-            // Correcting based on "Z-axis (forward movement) inverted" -> "when i move forward it graphs it down"
-            // "Forward" is likely dmp_world_ax. If it graphs down (positive canvas_y), then current -dmp_world_ax is correct if dmp_world_ax positive means forward.
-            // The problem was likely the arrow pointing right by default.
 
-            // IF "moving in y generates x movement" was true (DMP.ay controls canvas.x):
-            // AND if moving physically "left" (positive DMP.ay) should make canvas path go "left" (negative canvas.x)
-            // THEN: canvas_frame_accel_x = -dmp_world_ay;
-            canvas_frame_accel_x = -dmp_world_ay; // Assuming positive dmp_world_ay is physically left, want canvas to move left.
-
-            tracer.velocityX += canvas_frame_accel_x * dt;
-            tracer.velocityY += canvas_frame_accel_y * dt;
-
-            const dampingFactor = 0.7;
-            tracer.velocityX *= Math.pow((1 - dampingFactor), dt);
-            tracer.velocityY *= Math.pow((1 - dampingFactor), dt);
-
-            const dx_meters = tracer.velocityX * dt;
-            const dy_meters = tracer.velocityY * dt;
+            const dx_meters = tracer.velocityX * dt_s;
+            const dy_meters = tracer.velocityY * dt_s;
 
             tracer.currentX += dx_meters * tracer.scale;
             tracer.currentY += dy_meters * tracer.scale;
 
             const distMovedPixels = Math.sqrt(Math.pow(dx_meters * tracer.scale, 2) + Math.pow(dy_meters * tracer.scale, 2));
-            if (distMovedPixels > 2.0) { // Threshold for hi-res
+            if (distMovedPixels > 1.0) { // Adjusted threshold for adding points, considering hi-res canvas 
                  tracer.pathPoints.push({x: tracer.currentX, y: tracer.currentY});
                  if (tracer.pathPoints.length > tracer.maxPathPoints) {
                     tracer.pathPoints.shift();
@@ -671,7 +688,7 @@
             const currentSpeed = Math.sqrt(tracer.velocityX*tracer.velocityX + tracer.velocityY*tracer.velocityY);
 
             if (pathInfoEl) {
-                pathInfoEl.innerHTML = `<p>Dist: ${tracer.totalDistance.toFixed(2)}m | Speed: ${currentSpeed.toFixed(2)} m/s </p>`;
+                pathInfoEl.innerHTML = `<p>Dist: ${tracer.totalDistance.toFixed(2)}m | Speed: ${currentSpeed.toFixed(2)} m/s | Yaw: ${yawDeg.toFixed(1)}°</p>`;
             }
             drawPathTrace(espIdString);
         }
@@ -690,7 +707,6 @@
 
 
                 if (espCardEl) espCardEl.style.display = 'flex';
-                // Path card visibility handled by updatePathTracer now
 
                 if (espIpEl) espIpEl.textContent = esp.ip;
                 if (espDataStatusEl) espDataStatusEl.style.backgroundColor = esp.data_available ? 'var(--success-color)' : 'var(--error-color)';
@@ -713,7 +729,8 @@
                         createDMPVisualizer(dmpCubeContainer, espIdString);
                     }
                     if (dmpVisualizers[espIdString] && esp.dmp_data) {
-                        updateDMPCube(espIdString, esp.dmp_data);
+                        // Pass tracer to updateDMPCube so it can potentially use smoothed yaw
+                        updateDMPCube(espIdString, esp.dmp_data); 
                     }
 
                     if(dmpTextEl && esp.dmp_data) {
@@ -723,7 +740,13 @@
                         const ypr = esp.dmp_data.ypr_deg || {};
                         textContent += `<p><strong>Quat:</strong> W:${(quat.w||0).toFixed(2)}, X:${(quat.x||0).toFixed(2)}, Y:${(quat.y||0).toFixed(2)}, Z:${(quat.z||0).toFixed(2)}</p>`;
                         textContent += `<p><strong>World Accel (m/s²):</strong> AX:${(accel.ax||0).toFixed(2)}, AY:${(accel.ay||0).toFixed(2)}, AZ:${(accel.az||0).toFixed(2)}</p>`;
-                        textContent += `<p><strong>YPR (deg):</strong> Yaw:${(ypr.yaw||0).toFixed(1)}, Pitch:${(ypr.pitch||0).toFixed(1)}, Roll:${(ypr.roll||0).toFixed(1)}</p>`;
+                        
+                        let displayYaw = (ypr.yaw||0).toFixed(1);
+                        const tracer = pathTracers[espIdString];
+                        if(tracer && tracer.emaYaw !== null && tracer.lastUpdateTime !==0){
+                            displayYaw = `${(ypr.yaw||0).toFixed(1)} (EMA: ${tracer.emaYaw.toFixed(1)})`;
+                        }
+                        textContent += `<p><strong>YPR (deg):</strong> Yaw:${displayYaw}, Pitch:${(ypr.pitch||0).toFixed(1)}, Roll:${(ypr.roll||0).toFixed(1)}</p>`;
                         dmpTextEl.innerHTML = textContent;
                     }
                     if (pathTracers[espIdString] && esp.dmp_data) {
