@@ -17,11 +17,11 @@ JSON_OUTPUT_PATH = './walk.json' # Path for the output JSON file
 
 # --- SIM-TO-REAL MAPPING CONFIGURATION ---
 real_robot_home_deg_map = {
-    "FR_tigh_actuator": 45.0,
+    "FR_tigh_actuator": -45.0,
     "FR_knee_actuator": 45.0,
     "BR_tigh_actuator": 45.0,
     "BR_knee_actuator": -45.0,
-    "FL_tigh_actuator": -45.0,
+    "FL_tigh_actuator": 45.0,
     "FL_knee_actuator": 45.0,
     "BL_tigh_actuator": 45.0,
     "BL_knee_actuator": -45.0,

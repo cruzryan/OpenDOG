@@ -87,8 +87,8 @@ KNEE_FLEXION_SIGN_FACTOR = 1.0
 # --- SIM-TO-REAL MAPPING CONFIGURATION ---
 real_robot_home_deg_map = {name: 0.0 for name in ACTUATOR_NAMES_ORDERED}
 real_robot_home_deg_map.update({
-    "FR_tigh_actuator": 45.0, "FR_knee_actuator": 45.0, "BR_tigh_actuator": 45.0, "BR_knee_actuator": -45.0,
-    "FL_tigh_actuator": -45.0, "FL_knee_actuator": 45.0, "BL_tigh_actuator": 45.0, "BL_knee_actuator": -45.0,
+    "FR_tigh_actuator": -45.0, "FR_knee_actuator": 45.0, "BR_tigh_actuator": 45.0, "BR_knee_actuator": -45.0,
+    "FL_tigh_actuator": 45.0, "FL_knee_actuator": 45.0, "BL_tigh_actuator": 45.0, "BL_knee_actuator": -45.0,
 })
 joint_scale_factors = {name: 1.0 for name in ACTUATOR_NAMES_ORDERED}
 sim_keyframe_home_qpos_map = {}

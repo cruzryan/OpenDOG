@@ -23,15 +23,15 @@ KEYFRAME_NAME = 'home' # Name of the keyframe defining sim home pose
 # SIM-TO-REAL MAPPING CONFIGURATION
 # (Ensure these accurately reflect your simulation and real robot)
 REAL_ROBOT_HOME_DEG_MAP = {
-    "FR_tigh_actuator": 45.0, "FR_knee_actuator": 45.0,
+    "FR_tigh_actuator": -45.0, "FR_knee_actuator": 45.0,
     "BR_tigh_actuator": 45.0, "BR_knee_actuator": -45.0,
-    "FL_tigh_actuator": -45.0, "FL_knee_actuator": 45.0,
+    "FL_tigh_actuator": 45.0, "FL_knee_actuator": 45.0,
     "BL_tigh_actuator": 45.0, "BL_knee_actuator": -45.0,
 }
 JOINT_SCALE_FACTORS = {
-    "FR_tigh_actuator": -1.0, "FR_knee_actuator": 1.0,
+    "FR_tigh_actuator": 1.0, "FR_knee_actuator": 1.0,
     "BR_tigh_actuator": -1.0, "BR_knee_actuator": -1.0,
-    "FL_tigh_actuator": 1.0, "FL_knee_actuator": 1.0,
+    "FL_tigh_actuator": -1.0, "FL_knee_actuator": 1.0,
     "BL_tigh_actuator": -1.0, "BL_knee_actuator": -1.0,
 }
 
