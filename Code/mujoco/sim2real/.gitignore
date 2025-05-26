@@ -1,0 +1,3 @@
+# Ignore only in sim2real directory
+/*.pth
+/*.json
