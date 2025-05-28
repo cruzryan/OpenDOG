@@ -51,7 +51,7 @@ class WalkEnvironmentV0(MujocoEnv):
 		self._last_render_time = -1.0
 		self._max_episode_time_sec = 15.0
 		self._step = 0
-		self._debug = False  
+		self._debug = True  
 
 	def step(self, action):
 		self._step += 1
@@ -59,8 +59,7 @@ class WalkEnvironmentV0(MujocoEnv):
 		observation = self._get_obs()
 		reward, reward_info = self._calculate_rewards(action)
 		
-		terminated = not self.utils.is_healthy(self.data.qpos, self.data.qvel) and \
-					not self.data.qvel[0] < self.utils.desired_velocity_min[0]
+		terminated = not self.utils.is_healthy(self.data.qpos, self.data.qvel)
 		truncated = self._step >= (self._max_episode_time_sec / self.dt)
 		
 		info = {
@@ -84,6 +83,8 @@ class WalkEnvironmentV0(MujocoEnv):
 		costs = self._calculate_negative_costs(action)
 		reward = max(0.0, rewards - costs)
 		
+		#self._debug_rewards_costs(rewards, costs)
+
 		reward_info = {
 			"linear_vel_tracking_reward": self.utils.get_linear_velocity_tracking_reward(self.data.qvel[:2], self.data.qpos[0]),
 			"reward_ctrl": self.utils.torque_cost(self.data.qfrc_actuator[-8:]),
@@ -93,19 +94,33 @@ class WalkEnvironmentV0(MujocoEnv):
 		return reward, reward_info
 	
 	def _calculate_positive_rewards(self):
+		# print("Debug de linear_vel_tracking", self.utils.get_linear_velocity_tracking_reward(self.data.qvel[:2], self.data.qpos[0]) * self.utils.reward_weights["linear_vel_tracking"])
+		# print("Debug de healthy", self.utils.get_reward_safe_range(self.data.qpos, self.data.qvel) * self.utils.reward_weights["healthy"])
+		# print("Debug de angular_vel_tracking", self.utils.get_angular_velocity_tracking_reward(self.data.qvel[5]) * self.utils.reward_weights["angular_vel_tracking"])
+		# print("Debug de diagonal_gait_reward", self.utils.diagonal_gait_reward(self.data, self.model) * self.utils.reward_weights["diagonal_gait_reward"])
+		# print("Debug de feet_airtime", self.utils.feet_air_time_reward(self.dt, self.data, self.model) * self.utils.reward_weights["feet_airtime"])
+
 		return (
 			+ self.utils.get_linear_velocity_tracking_reward(self.data.qvel[:2], self.data.qpos[0]) * self.utils.reward_weights["linear_vel_tracking"]
-			+ self.utils.get_reward_safe_range(self.data.qpos, self.data.qvel) * self.utils.reward_weights["healthy"]
 			+ self.utils.get_angular_velocity_tracking_reward(self.data.qvel[5]) * self.utils.reward_weights["angular_vel_tracking"]
 			+ self.utils.diagonal_gait_reward(self.data, self.model) * self.utils.reward_weights["diagonal_gait_reward"]
-			
+			+ self.utils.feet_air_time_reward(self.dt, self.data, self.model) * self.utils.reward_weights["feet_airtime"]
 		)
 
-	#+ self.utils.non_flat_base_cost(self.data.qpos[3:7]) * self.utils.cost_weights["orientation"]
+	#+ 
 	def _calculate_negative_costs(self, action):
+		# print("Debug de torque", self.utils.torque_cost(self.data.qfrc_actuator[-8:]) * self.utils.cost_weights["torque"])
+		# print("Debug de action_rate", self.utils.action_rate_cost(action) * self.utils.cost_weights["action_rate"])
+		# print("Debug de vertical_vel", self.utils.vertical_velocity_cost(self.data.qvel[2]) * self.utils.cost_weights["vertical_vel"])
+		# print("Debug de cost_distance", self.utils.get_cost_distance(self.data.qpos, self.dt) * self.utils.cost_weights["cost_distance"])
+		
 		return (
-			+ self.utils.get_cost_distance(self.data.qpos[0]) * self.utils.cost_weights["cost_distance"]
+			+ self.utils.get_reward_safe_range(self.data.qpos, self.data.qvel) * self.utils.reward_weights["healthy"]
+			+ self.utils.torque_cost(self.data.qfrc_actuator[-8:]) * self.utils.cost_weights["torque"]
+			+ self.utils.action_rate_cost(action) * self.utils.cost_weights["action_rate"]
 			+ self.utils.vertical_velocity_cost(self.data.qvel[2]) * self.utils.cost_weights["vertical_vel"]
+			+ self.utils.get_cost_distance(self.data.qpos, self.dt) * self.utils.cost_weights["cost_distance"]
+			+ self.utils.default_joint_position_cost(self.data.qpos[7:]) * self.utils.cost_weights["default_joint_position"]
 			+ self.utils.non_flat_base_cost(self.data.qpos[3:7]) * self.utils.cost_weights["orientation"]
 		)
 

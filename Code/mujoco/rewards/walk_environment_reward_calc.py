@@ -26,17 +26,17 @@ class WalkEnvironmentRewardCalc:
 	def __init__(self, gravity, default_joint_position, actuator_range):
 
 		self.reward_weights = {
-			"linear_vel_tracking": 3.0,
-			"angular_vel_tracking": 1.0,
+			"linear_vel_tracking": 5,
+			"angular_vel_tracking": .001,
 			"distance": .5, 
-			"healthy": .98,
+			"healthy": 1,
 			"feet_airtime": .2,
-			"diagonal_gait_reward": .6,
+			"diagonal_gait_reward": 1,
 			"contact_force": .005,
 		}
 
 		self.cost_weights = {
-			"cost_distance": 4,
+			"cost_distance": 5,
 			"torque": 0.0001,
 			"vertical_vel": 2.0,
 			"xy_angular_vel": 0.05,
@@ -70,8 +70,8 @@ class WalkEnvironmentRewardCalc:
 
 		self.gravity_vector = np.array(gravity)
 		self.default_joint_position = np.array(default_joint_position)
-		self.desired_velocity_min = np.array([1.2, -0.0, -0.0])
-		self.desired_velocity_max = np.array([2, 0.0, 0.0])
+		self.desired_velocity_min = np.array([1.5, -0.0, -0.0])
+		self.desired_velocity_max = np.array([1.9, 0.0, 0.0])
 		self.desired_velocity = self.sample_desired_vel()
 		self.obs_scale = {
 			"linear_velocity": 2.0,
@@ -83,22 +83,22 @@ class WalkEnvironmentRewardCalc:
 		self.tracking_velocity_sigma = 0.25
 		
 		#Control deviation of a rect line
-		self.z_range = (1.30, 1.65)
-		self.yaw_range = np.deg2rad(5)
-		self.pitch_range = np.deg2rad(5)
-		self.roll_range = np.deg2rad(5)
+		self.z_range = (.04, 0.110)
+		self.yaw_range = np.deg2rad(15)
+		self.pitch_range = np.deg2rad(15)
+		self.roll_range = np.deg2rad(15)
 
 		self.feet_air_time = np.zeros(4)
 		self.last_contacts = np.zeros(4)
 		self.body_feet_indices = [4, 7, 10, 13]  # 4:FR, 7:FL, 10:RR, 13:RL
 		self.body_indices = [2, 3, 5, 6, 8, 9, 11, 12]
 		
-		dof_position_limit_multiplier = 0.5
-		ctrl_range_offset = ( 0.5 * (1 - dof_position_limit_multiplier)*( actuator_range[:, 1] - actuator_range[:, 0] ))
+		dof_position_limit_multiplier = 0.9
+		ctrl_range_offset = ( 0.1 * (1 - dof_position_limit_multiplier)*( actuator_range[:, 1] - actuator_range[:, 0] ))
 		self.soft_joint_range = np.copy(actuator_range)
 		self.soft_joint_range[:, 0] += ctrl_range_offset
 		self.soft_joint_range[:, 1] -= ctrl_range_offset
-		self.reset_noise_scale = 0.1
+		self.reset_noise_scale = 0.02
 		self.last_action = np.zeros(8)
 		self.clip_obs_threshold = 100.0
 
@@ -120,8 +120,6 @@ class WalkEnvironmentRewardCalc:
 		if not np.isfinite(state).all():
 			return False
 
-		if not ( self.z_range[0] < state[2] < self.z_range[1]):
-			return False
 		
 		current_roll, current_pitch, current_yaw = self.euler_from_quaternion(state[3:7])
 
@@ -141,12 +139,7 @@ class WalkEnvironmentRewardCalc:
 		
 		if not np.isfinite(state).all():
 			return False
-
-		if not ( self.z_range[0] < state[2] < self.z_range[1]):
-			return False
-
-		distance_z = min(state[2] - self.z_range[0], self.z_range[1] - state[2])
-
+		
 		current_roll, current_pitch, current_yaw = self.euler_from_quaternion(state[3:7])
 
 		distance_roll = (self.roll_range - abs(current_roll)) if not ( abs(current_roll) > self.roll_range)  else 0
@@ -155,7 +148,7 @@ class WalkEnvironmentRewardCalc:
 
 		max_distance = self.z_range[1] + self.roll_range + self.pitch_range + self.yaw_range
 
-		return (distance_roll + distance_pitch + distance_yaw + distance_z)/max_distance
+		return (distance_roll + distance_pitch + distance_yaw)/max_distance
 
 	def get_projected_gravity(self, orientation_vector):
 		euler_orientation = np.array(self.euler_from_quaternion(orientation_vector))
@@ -200,9 +193,9 @@ class WalkEnvironmentRewardCalc:
 		else: 
 			return 0
 
-	def get_cost_distance(self, position):
-		if position <= self.max_distance_achieve:
-			return abs(position)
+	def get_cost_distance(self, position, time):
+		if position[0] <= self.max_distance_achieve:
+			return time
 		return 0
 
 	def diagonal_gait_reward(self, data, model):
@@ -225,7 +218,7 @@ class WalkEnvironmentRewardCalc:
 		self.time_in_pattern += 1
 		for current, expected, next_expected_pattern, feet in zip(current_state, expected_pattern, next_expected_pattern,self.body_feet_indices):
 			contact_force = np.linalg.norm([paw_contact_force[feet][0], paw_contact_force[feet][2]])
-			if current == expected and contact_force >= 4.8 and self.time_in_pattern > 500:
+			if current == expected and paw_contact_force[feet][0] >= 3.5 and self.time_in_pattern > 100:
 				matches += 1
 
 		pattern_matches = matches == len(self.body_feet_indices) 

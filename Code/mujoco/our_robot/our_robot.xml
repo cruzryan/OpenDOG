@@ -11,13 +11,13 @@
 			<position kp="25" kv="1" forcerange="-0.83 0.83"/>
 			
 			<default class="tigh">
-				<joint type="hinge" range="2.36 3.14" axis="0 1 0"/>
-				<position ctrlrange="2.36 3.14"/>
+				<joint type="hinge" range="2.36 2.8" axis="0 1 0"/>
+				<position ctrlrange="2.36 2.8"/>
 			</default>
 
 			<default class="knee">
-				<joint type="hinge" range="-2.6816 -1.20" axis="0 1 0"/>
-				<position  ctrlrange="-2.6816 -1.20"/>
+				<joint type="hinge" range="-1.8 -1.20" axis="0 1 0"/>
+				<position  ctrlrange="-1.8 -1.20"/>
 			</default>
 			
 			<default class="paw">
@@ -38,10 +38,10 @@
 	</asset>
 
 	<worldbody>
-		<body name="trunk" childclass="our_robot" pos="0 0 .25">
+		<body name="trunk" childclass="our_robot" pos="0 0 .15">
 				<camera name="tracking" mode="trackcom" pos="0 -1 0.8" xyaxes="1 0 0 0 1 1"/>
 				<geom contype="0" conaffinity="0" mesh="chasis" mass="1.858"/>
-				<joint type="free" />
+				<joint type="free"/>
 
 				<body name="FL_tigh" pos="7.05e-02 8.16e-02 -13.00e-04">
 						<geom mesh="left_tigh" mass=".01377"/>
@@ -108,7 +108,7 @@
 			<position class="knee" name="BL_knee_actuator" joint="BL_knee_joint"/>
 	</actuator>
 
-	<!-- 0 0 .20 0 0 0 0 -->
+	<!--  -->
 	<keyframe>
 			<key name="home"
 			qpos="0 0 .20 0 0 0 0 2.35619 -1.5708 2.35619 -1.5708 2.35619 -1.5708 2.35619 -1.5708"

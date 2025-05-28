@@ -4,7 +4,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
 from stable_baselines3.common.env_util import make_vec_env
-
+from stable_baselines3.common.logger import configure
 
 from environments.WalkEnvironment import WalkEnvironmentV0
 from environments.JumpEnvironment import JumpEnvironmentV0
@@ -13,110 +13,101 @@ from .VideoRecorder import VideoRecorderCallback
 import os
 
 def create_vec_env(env_id, n_envs, seed=None):
-    # Define the base environment class
-    base_env_class = WalkEnvironmentV0 if env_id == "walk" else JumpEnvironmentV0
-    
-    def make_wrapped_env(**kwargs):
-        env = base_env_class(**kwargs)
-        env = ScaleActionWrapper(env)  # Wrap the instance, not the class
-        return env
-    
-    vec_env = make_vec_env(
-        make_wrapped_env,  # Pass the instance-creating function
-        env_kwargs={"render_mode": "human"},
-        n_envs=n_envs,
-        seed=seed,
-        vec_env_cls=SubprocVecEnv
-    )
-    return vec_env
+	base_env_class = WalkEnvironmentV0 if env_id == "walk" else JumpEnvironmentV0
+	vec_env = make_vec_env(
+		lambda: ScaleActionWrapper(base_env_class(render_mode="rgb_array")),
+		n_envs=n_envs,
+		seed=seed,
+		vec_env_cls=SubprocVecEnv
+	)
+	return vec_env
 
 if __name__ == "__main__":
+	parser = ArgumentParser()
+	parser.add_argument('motion', choices=["walk", "jump"], help="Specify the motion type: 'walk' or 'jump'")
+	parser.add_argument('--evaluation_frequency', type=int, default=1000000, help="Frequency of video recording in steps")
+	parser.add_argument('--record_frequency', type=int, default=1000000, help="Frequency of video recording in steps")
+	parser.add_argument('--duration', type=int, default=10, help="Duration of each video in seconds")
+	parser.add_argument('--fps', type=int, default=30, help="Frames per second for the video")
+	parser.add_argument('--n_envs', type=int, default=4, help="Number of parallel environments")
+	parser.add_argument('--seed', type=int, default=0, help="Random seed for reproducibility")
+	args = parser.parse_args()
+
+	vec_env = create_vec_env(args.motion, args.n_envs, seed=args.seed)
+	eval_env = create_vec_env(args.motion, args.n_envs, seed=args.seed)
+	record_env = create_vec_env(args.motion, n_envs=1, seed=args.seed)
+
+	print("Action space vec_env :", vec_env.action_space)
+	print("Observation space vec_env :", vec_env.observation_space)
+
+	print("Action space eval_env :", vec_env.action_space)
+	print("Observation space eval_env :", vec_env.observation_space)
+
+	print("Action space record_env :", vec_env.action_space)
+	print("Observation space record_env :", vec_env.observation_space)
 
 
+	# Directorios de salida
+	tensorboard_dir = f"./ppo_robot_tensorboard/{args.motion}/"
+	video_output_dir = f"./videos/{args.motion}/"
+	model_output_dir = f"./models/{args.motion}/"
+	best_model_path = os.path.join(model_output_dir, "best_model")
+	os.makedirs(video_output_dir, exist_ok=True)
+	os.makedirs(model_output_dir, exist_ok=True)
+	os.makedirs(tensorboard_dir, exist_ok=True)
 
-        # Argumentos del script
-        parser = ArgumentParser()
-        parser.add_argument('motion', choices=["walk", "jump"], help="Specify the motion type: 'walk' or 'jump'")
-        parser.add_argument('--frequency', type=int, default=1000000, help="Frequency of video recording in steps")
-        parser.add_argument('--duration', type=int, default=10, help="Duration of each video in seconds")
-        parser.add_argument('--fps', type=int, default=30, help="Frames per second for the video")
-        parser.add_argument('--n_envs', type=int, default=4, help="Number of parallel environments")
-        parser.add_argument('--seed', type=int, default=0, help="Random seed for reproducibility")
-        args = parser.parse_args()
+	model = PPO(
+		policy = "MlpPolicy",
+		verbose = 2,
+		env=vec_env, 
+		learning_rate=1e-4,              # Más bajo que el default (3e-4)
+		n_steps=2048,                    # Muestras por iteración
+		batch_size=512,                  # Tamaño de batch
+		n_epochs=10,                     # Épocas de optimización por iteración
+		gamma=0.99,                      # Factor de descuento
+		ent_coef=0.019,                   # Fomenta exploración
+		clip_range=0.2,                  # Clipping de políticas
+		max_grad_norm=0.5,               # Evita gradientes explosivos
+		tensorboard_log=tensorboard_dir  # Monitorización
+	)
 
-        # Configuración del entorno
-        n_envs = args.n_envs
-        env_id = args.motion
-        vec_env = create_vec_env(env_id, n_envs, seed=args.seed)
+	video_callback = VideoRecorderCallback(
+		environment=record_env,
+		save_frequency=int(args.record_frequency),
+		save_path=video_output_dir,
+		env_id=args.motion,
+		fps=args.fps,
+		duration=args.duration
+	)				
 
-        # Entorno de evaluación (consistente con env_id)
-        eval_env_class = WalkEnvironmentV0 if env_id == "walk" else JumpEnvironmentV0
-        eval_env = create_vec_env(env_id, n_envs, seed=args.seed)
+	eval_callback = EvalCallback(
+		eval_env=eval_env,
+		best_model_save_path=best_model_path,
+		eval_freq=int(args.evaluation_frequency),
+		n_eval_episodes=5,
+		deterministic=False,
+		verbose=1
+	)
 
-        record_env = create_vec_env(env_id, n_envs=1, seed=args.seed + 999)
+	try:
+		new_logger = configure("./tmp/training_logs", ["stdout", "csv", "tensorboard"])
+		model.set_logger(new_logger)
+		model.learn(
+			total_timesteps = 30000000,
+			callback=[video_callback, eval_callback],
+			reset_num_timesteps=False,
+			progress_bar=True
+		)
+		model.save(f"{model_output_dir}/{args.motion}_{model.num_timesteps}")
+	except (Exception, KeyboardInterrupt, RuntimeError) as e:
+		print("Training interrupted or encountered an error:", e)
+	finally:
+		if vec_env is not None:
+			vec_env.close()
+		if eval_env is not None:
+			eval_env.close()
+		if record_env is not None:
+			record_env.close()
 
-        # Directorios de salida
-        tensorboard_dir = f"./ppo_robot_tensorboard/{args.motion}/"
-        video_output_dir = f"./videos/{args.motion}/"
-        model_output_dir = f"./models/{args.motion}/"
-        best_model_path = os.path.join(model_output_dir, "best_model")
-        os.makedirs(video_output_dir, exist_ok=True)
-        os.makedirs(model_output_dir, exist_ok=True)
-        os.makedirs(tensorboard_dir, exist_ok=True)
-
-        # Inicializa y entrena el modelo
-        model = PPO(
-                policy = "MlpPolicy",
-                verbose = 2,
-                env=vec_env, 
-                learning_rate=1e-4,            # Más bajo que el default (3e-4)
-                n_steps=2048,                  # Muestras por iteración
-                batch_size=512,                # Tamaño de batch
-                n_epochs=10,                   # Épocas de optimización por iteración
-                gamma=0.99,                    # Factor de descuento
-                ent_coef=0.01,                    # Fomenta exploración
-                clip_range=0.2,                # Clipping de políticas
-                max_grad_norm=0.5,             # Evita gradientes explosivos
-                tensorboard_log=tensorboard_dir     # Monitorización
-        )
-
-        # Callback para grabación de videos
-        video_callback = VideoRecorderCallback(
-                save_frequency=args.frequency,
-                save_path=video_output_dir,
-                environment=record_env,
-                env_id=args.motion,
-                fps=args.fps,
-                duration=args.duration
-        )								
-
-        # Callback para evaluar y guardar el mejor modelo cada 2,000,000 de pasos globales
-        eval_freq = 1000000 // n_envs  # Ajuste para múltiples ambientes
-        eval_callback = EvalCallback(
-                eval_env,
-                best_model_save_path=best_model_path,
-                eval_freq=eval_freq,
-                n_eval_episodes=5,
-                deterministic=True,
-                verbose=1
-        )
-
-        try:
-                model.learn(
-                        total_timesteps = 30000000,
-                        callback=[video_callback, eval_callback],
-                        reset_num_timesteps=False,
-                        progress_bar=True
-                )
-                # Guarda el modelo final
-                model.save(f"{model_output_dir}/{args.motion}_{model.num_timesteps}")
-        except (Exception, KeyboardInterrupt, RuntimeError) as e:
-                print("Training interrupted or encountered an error:", e)
-        finally:
-                if vec_env is not None:
-                        vec_env.close()
-                if eval_env is not None:
-                        eval_env.close()
-
-        print(f"Videos saved to {video_output_dir}")
-        print(f"Best model saved to {best_model_path}")
+	print(f"Videos saved to {video_output_dir}")
+	print(f"Best model saved to {best_model_path}")
