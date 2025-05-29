@@ -1,0 +1,652 @@
+[
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 36.84,
+      "FL_tigh_actuator": 50.2,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 50.2,
+      "BR_knee_actuator": -45.0,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -36.84
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 45.0,
+      "FL_tigh_actuator": 45.22,
+      "FL_knee_actuator": 66.25,
+      "BR_tigh_actuator": 45.22,
+      "BR_knee_actuator": -71.82,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -35.55,
+      "FR_knee_actuator": 21.14,
+      "FL_tigh_actuator": 60.36,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 60.36,
+      "BR_knee_actuator": -45.0,
+      "BL_tigh_actuator": 54.45,
+      "BL_knee_actuator": -23.75
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 45.0,
+      "FL_tigh_actuator": 45.22,
+      "FL_knee_actuator": 64.24,
+      "BR_tigh_actuator": 45.22,
+      "BR_knee_actuator": -64.24,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -30.28,
+      "FR_knee_actuator": 20.12,
+      "FL_tigh_actuator": 75.83,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 75.83,
+      "BR_knee_actuator": -45.0,
+      "BL_tigh_actuator": 59.72,
+      "BL_knee_actuator": -23.75
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 45.0,
+      "FL_tigh_actuator": 45.22,
+      "FL_knee_actuator": 59.53,
+      "BR_tigh_actuator": 45.22,
+      "BR_knee_actuator": -59.53,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -19.89,
+      "FR_knee_actuator": 25.4,
+      "FL_tigh_actuator": 74.15,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 74.15,
+      "BR_knee_actuator": -45.0,
+      "BL_tigh_actuator": 70.11,
+      "BL_knee_actuator": -25.4
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 45.0,
+      "FL_tigh_actuator": 45.22,
+      "FL_knee_actuator": 66.25,
+      "BR_tigh_actuator": 45.22,
+      "BR_knee_actuator": -73.74,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -27.82,
+      "FR_knee_actuator": 20.19,
+      "FL_tigh_actuator": 71.73,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 71.73,
+      "BR_knee_actuator": -45.0,
+      "BL_tigh_actuator": 62.18,
+      "BL_knee_actuator": -23.75
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 45.0,
+      "FL_tigh_actuator": 45.22,
+      "FL_knee_actuator": 43.96,
+      "BR_tigh_actuator": 45.22,
+      "BR_knee_actuator": -43.96,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -10.96,
+      "FR_knee_actuator": 33.55,
+      "FL_tigh_actuator": 78.51,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 78.51,
+      "BR_knee_actuator": -45.0,
+      "BL_tigh_actuator": 79.04,
+      "BL_knee_actuator": -33.55
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 45.0,
+      "FL_tigh_actuator": 45.22,
+      "FL_knee_actuator": 66.25,
+      "BR_tigh_actuator": 45.22,
+      "BR_knee_actuator": -70.68,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -14.29,
+      "FR_knee_actuator": 20.71,
+      "FL_tigh_actuator": 66.61,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 66.61,
+      "BR_knee_actuator": -45.0,
+      "BL_tigh_actuator": 75.71,
+      "BL_knee_actuator": -23.75
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 45.0,
+      "FL_tigh_actuator": 45.22,
+      "FL_knee_actuator": 66.25,
+      "BR_tigh_actuator": 45.22,
+      "BR_knee_actuator": -80.78,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -17.15,
+      "FR_knee_actuator": 21.83,
+      "FL_tigh_actuator": 73.56,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 73.56,
+      "BR_knee_actuator": -45.0,
+      "BL_tigh_actuator": 72.85,
+      "BL_knee_actuator": -23.75
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 45.0,
+      "FL_tigh_actuator": 45.22,
+      "FL_knee_actuator": 65.79,
+      "BR_tigh_actuator": 45.22,
+      "BR_knee_actuator": -65.79,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 17.79,
+      "FL_tigh_actuator": 78.74,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 78.74,
+      "BR_knee_actuator": -45.0,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -23.75
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -26.03,
+      "FR_knee_actuator": 45.0,
+      "FL_tigh_actuator": 45.22,
+      "FL_knee_actuator": 8.5,
+      "BR_tigh_actuator": 45.22,
+      "BR_knee_actuator": -23.75,
+      "BL_tigh_actuator": 63.97,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 42.31,
+      "FL_tigh_actuator": 76.23,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 76.23,
+      "BR_knee_actuator": -45.0,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -42.31
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -5.55,
+      "FR_knee_actuator": 45.0,
+      "FL_tigh_actuator": 45.22,
+      "FL_knee_actuator": 12.2,
+      "BR_tigh_actuator": 45.22,
+      "BR_knee_actuator": -23.75,
+      "BL_tigh_actuator": 84.45,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 8.24,
+      "FL_tigh_actuator": 83.59,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 83.59,
+      "BR_knee_actuator": -45.0,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -23.75
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -41.62,
+      "FR_knee_actuator": 45.0,
+      "FL_tigh_actuator": 45.22,
+      "FL_knee_actuator": 66.25,
+      "BR_tigh_actuator": 45.22,
+      "BR_knee_actuator": -80.66,
+      "BL_tigh_actuator": 48.38,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -28.28,
+      "FR_knee_actuator": 9.58,
+      "FL_tigh_actuator": 77.52,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 77.52,
+      "BR_knee_actuator": -45.0,
+      "BL_tigh_actuator": 61.72,
+      "BL_knee_actuator": -23.75
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 45.0,
+      "FL_tigh_actuator": 45.22,
+      "FL_knee_actuator": 66.25,
+      "BR_tigh_actuator": 45.22,
+      "BR_knee_actuator": -83.24,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 11.18,
+      "FL_tigh_actuator": 79.83,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 79.83,
+      "BR_knee_actuator": -45.0,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -23.75
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -15.19,
+      "FR_knee_actuator": 45.0,
+      "FL_tigh_actuator": 45.22,
+      "FL_knee_actuator": 12.08,
+      "BR_tigh_actuator": 45.22,
+      "BR_knee_actuator": -23.75,
+      "BL_tigh_actuator": 74.81,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 35.33,
+      "FL_tigh_actuator": 79.02,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 79.02,
+      "BR_knee_actuator": -45.0,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -35.33
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -20.59,
+      "FR_knee_actuator": 45.0,
+      "FL_tigh_actuator": 45.22,
+      "FL_knee_actuator": 14.92,
+      "BR_tigh_actuator": 45.22,
+      "BR_knee_actuator": -23.75,
+      "BL_tigh_actuator": 69.41,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 16.87,
+      "FL_tigh_actuator": 80.11,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 80.11,
+      "BR_knee_actuator": -45.0,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -23.75
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -29.08,
+      "FR_knee_actuator": 45.0,
+      "FL_tigh_actuator": 45.22,
+      "FL_knee_actuator": 66.25,
+      "BR_tigh_actuator": 45.22,
+      "BR_knee_actuator": -79.65,
+      "BL_tigh_actuator": 60.92,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 9.19,
+      "FL_tigh_actuator": 75.66,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 75.66,
+      "BR_knee_actuator": -45.0,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -23.75
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -27.08,
+      "FR_knee_actuator": 45.0,
+      "FL_tigh_actuator": 45.22,
+      "FL_knee_actuator": 66.24,
+      "BR_tigh_actuator": 45.22,
+      "BR_knee_actuator": -66.24,
+      "BL_tigh_actuator": 62.92,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 6.52,
+      "FL_tigh_actuator": 84.49,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 84.49,
+      "BR_knee_actuator": -45.0,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -23.75
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -20.69,
+      "FR_knee_actuator": 45.0,
+      "FL_tigh_actuator": 45.22,
+      "FL_knee_actuator": 9.42,
+      "BR_tigh_actuator": 45.22,
+      "BR_knee_actuator": -23.75,
+      "BL_tigh_actuator": 69.31,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 64.57,
+      "FL_tigh_actuator": 51.23,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 51.23,
+      "BR_knee_actuator": -45.0,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -64.57
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -8.65,
+      "FR_knee_actuator": 45.0,
+      "FL_tigh_actuator": 57.92,
+      "FL_knee_actuator": 8.7,
+      "BR_tigh_actuator": 57.92,
+      "BR_knee_actuator": -23.75,
+      "BL_tigh_actuator": 81.35,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 20.28,
+      "FL_tigh_actuator": 79.31,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 79.31,
+      "BR_knee_actuator": -45.0,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -23.75
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -29.05,
+      "FR_knee_actuator": 45.0,
+      "FL_tigh_actuator": 45.22,
+      "FL_knee_actuator": 66.25,
+      "BR_tigh_actuator": 45.22,
+      "BR_knee_actuator": -71.24,
+      "BL_tigh_actuator": 60.95,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 20.8,
+      "FL_tigh_actuator": 45.22,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 45.22,
+      "BR_knee_actuator": -45.0,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -23.75
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -25.43,
+      "FR_knee_actuator": 45.0,
+      "FL_tigh_actuator": 72.36,
+      "FL_knee_actuator": 66.25,
+      "BR_tigh_actuator": 72.36,
+      "BR_knee_actuator": -81.97,
+      "BL_tigh_actuator": 64.57,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 19.72,
+      "FL_tigh_actuator": 71.15,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 71.15,
+      "BR_knee_actuator": -45.0,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -23.75
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 45.0,
+      "FL_tigh_actuator": 45.22,
+      "FL_knee_actuator": 10.07,
+      "BR_tigh_actuator": 45.22,
+      "BR_knee_actuator": -23.75,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 62.79,
+      "FL_tigh_actuator": 66.99,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 66.99,
+      "BR_knee_actuator": -45.0,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -62.79
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -13.66,
+      "FR_knee_actuator": 45.0,
+      "FL_tigh_actuator": 46.78,
+      "FL_knee_actuator": 11.75,
+      "BR_tigh_actuator": 46.78,
+      "BR_knee_actuator": -23.75,
+      "BL_tigh_actuator": 76.34,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 7.06,
+      "FL_tigh_actuator": 83.84,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 83.84,
+      "BR_knee_actuator": -45.0,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -23.75
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -25.18,
+      "FR_knee_actuator": 45.0,
+      "FL_tigh_actuator": 45.22,
+      "FL_knee_actuator": 66.25,
+      "BR_tigh_actuator": 45.22,
+      "BR_knee_actuator": -78.63,
+      "BL_tigh_actuator": 64.82,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 12.75,
+      "FL_tigh_actuator": 59.89,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 59.89,
+      "BR_knee_actuator": -45.0,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -23.75
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -18.87,
+      "FR_knee_actuator": 45.0,
+      "FL_tigh_actuator": 45.22,
+      "FL_knee_actuator": 66.25,
+      "BR_tigh_actuator": 45.22,
+      "BR_knee_actuator": -74.43,
+      "BL_tigh_actuator": 71.13,
+      "BL_knee_actuator": -45.0
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -44.78,
+      "FR_knee_actuator": 7.03,
+      "FL_tigh_actuator": 83.66,
+      "FL_knee_actuator": 45.0,
+      "BR_tigh_actuator": 83.66,
+      "BR_knee_actuator": -45.0,
+      "BL_tigh_actuator": 45.22,
+      "BL_knee_actuator": -23.75
+    }
+  },
+  {
+    "duration": 0.1,
+    "targets_deg": {
+      "FR_tigh_actuator": -14.67,
+      "FR_knee_actuator": 45.0,
+      "FL_tigh_actuator": 45.22,
+      "FL_knee_actuator": 8.09,
+      "BR_tigh_actuator": 45.22,
+      "BR_knee_actuator": -23.75,
+      "BL_tigh_actuator": 75.33,
+      "BL_knee_actuator": -45.0
+    }
+  }
+]
