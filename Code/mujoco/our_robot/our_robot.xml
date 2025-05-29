@@ -21,7 +21,7 @@
 			</default>
 			
 			<default class="paw">
-				<geom mass=".001" friction=".516 .141 .01"/>
+				<geom mass=".001" friction=".516 .141 .01" />
 			</default>
 
 		</default>
