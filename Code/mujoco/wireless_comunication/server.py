@@ -99,6 +99,7 @@ class mujoco_communication:
         qvel_data = d.qvel[0:3].flat.copy()
         control_data = d.ctrl.flat.copy()
         timestamp = time.time()
+        self.walk_rewards.diagonal_gait_reward(d, m)
         paw_contact_forces = self.walk_rewards.get_paw_contact_forces(d, m)
         num_qpos = len(m.qpos0)
         num_qvel = m.nv

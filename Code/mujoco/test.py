@@ -24,13 +24,14 @@ def test_model(env, motion):
 	x_curve = ground_force[0]* np.sin(np.linspace(0, 2*np.pi, 50))
 	samples = np.zeros((4, 50), dtype=float)
 	j = 0
-	
-	for i in range(9000):
-		action, _states = model.predict(obs, deterministic=False)
+
+	patterns = []	
+	for i in range(500):
+		action, _states = model.predict(obs, deterministic=True)
 
 		print(f"Action: {action}")
 		print(f"States: {_states}")
-		
+			
 		obs, reward, terminated, truncated, info = env.step(action)
 		#print("obs", obs)
 		#print("reward", reward)
@@ -38,6 +39,8 @@ def test_model(env, motion):
 		#print("truncated", truncated)
 		#print("info", info)
 		print("patterns", info['paw_contact_forces'][4][2])
+
+		patterns.append(info['patterns_matches'])
 
 		np.put(samples[0], j, info['paw_contact_forces'][4][2]) 
 		np.put(samples[1], j, info['paw_contact_forces'][7][2]) 
@@ -53,6 +56,7 @@ def test_model(env, motion):
 			print ("MSE fuerza pata trasera izquierda", np.square(samples[2] - z_curve).mean())
 			print ("MSE fuerza pata trasera derecha", np.square(samples[3] - z_curve).mean())
 
+	print(patterns)
 	env.close()
 
 if __name__ == "__main__":

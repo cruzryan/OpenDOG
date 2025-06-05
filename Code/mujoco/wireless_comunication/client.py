@@ -38,7 +38,7 @@ class client_mujoco_communication:
 					ctrl_values = unpacked_data_dict['ctr_data']
 					ground_reaction_forces = unpacked_data_dict['contact_forces_data']
 					active_contacts = unpacked_data_dict['active_contacts']
-					print(ground_reaction_forces)
+					#print(ground_reaction_forces)
 					"""
 					print(f"Cliente UDP (MessagePack): Datos recibidos - Timestamp: {timestamp:.6f}")
 					print(f"Posición del tronco ({num_qpos}): {qpos_values[:3]}")

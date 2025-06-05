@@ -11,9 +11,9 @@ Azimuth angle https://en.wikipedia.org/wiki/Azimuth
 See more in https://en.wikipedia.org/wiki/Spherical_coordinate_system
 """
 DEFAULT_CAMERA_CONFIG = {
-	"type": 0,
+	"type": 1,
 	"fixedcamid": 1,
-	"trackbodyid": 0,
+	"trackbodyid": 1,
 
 	"lookat": np.array([.07, 0., .10]),
 	"distance": .80,
@@ -102,9 +102,8 @@ class WalkEnvironmentV0(MujocoEnv):
 
 		return (
 			+ self.utils.get_linear_velocity_tracking_reward(self.data.qvel[:2], self.data.qpos[0]) * self.utils.reward_weights["linear_vel_tracking"]
-			+ self.utils.get_angular_velocity_tracking_reward(self.data.qvel[5]) * self.utils.reward_weights["angular_vel_tracking"]
+			+ self.utils.get_reward_safe_range(self.data.qpos, self.data.qvel) * self.utils.reward_weights["healthy"]
 			+ self.utils.diagonal_gait_reward(self.data, self.model) * self.utils.reward_weights["diagonal_gait_reward"]
-			+ self.utils.feet_air_time_reward(self.dt, self.data, self.model) * self.utils.reward_weights["feet_airtime"]
 		)
 
 	#+ 
@@ -113,15 +112,10 @@ class WalkEnvironmentV0(MujocoEnv):
 		# print("Debug de action_rate", self.utils.action_rate_cost(action) * self.utils.cost_weights["action_rate"])
 		# print("Debug de vertical_vel", self.utils.vertical_velocity_cost(self.data.qvel[2]) * self.utils.cost_weights["vertical_vel"])
 		# print("Debug de cost_distance", self.utils.get_cost_distance(self.data.qpos, self.dt) * self.utils.cost_weights["cost_distance"])
-		
+		# print("Debug de default_joint_position_cost", self.utils.default_joint_position_cost(self.data.qpos[7:]) * self.utils.cost_weights["default_joint_position"])
 		return (
-			+ self.utils.get_reward_safe_range(self.data.qpos, self.data.qvel) * self.utils.reward_weights["healthy"]
-			+ self.utils.torque_cost(self.data.qfrc_actuator[-8:]) * self.utils.cost_weights["torque"]
-			+ self.utils.action_rate_cost(action) * self.utils.cost_weights["action_rate"]
-			+ self.utils.vertical_velocity_cost(self.data.qvel[2]) * self.utils.cost_weights["vertical_vel"]
-			+ self.utils.get_cost_distance(self.data.qpos, self.dt) * self.utils.cost_weights["cost_distance"]
 			+ self.utils.default_joint_position_cost(self.data.qpos[7:]) * self.utils.cost_weights["default_joint_position"]
-			+ self.utils.non_flat_base_cost(self.data.qpos[3:7]) * self.utils.cost_weights["orientation"]
+			+ self.utils.action_rate_cost(action) * self.utils.cost_weights["action_rate"]
 		)
 
 	def _debug_rewards_costs(self, rewards, costs):

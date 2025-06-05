@@ -28,8 +28,8 @@ class WalkEnvironmentRewardCalc:
 		self.reward_weights = {
 			"linear_vel_tracking": 5,
 			"angular_vel_tracking": .001,
-			"distance": .5, 
-			"healthy": 1,
+			"distance": .009, 
+			"healthy": .01,
 			"feet_airtime": .2,
 			"diagonal_gait_reward": 1,
 			"contact_force": .005,
@@ -187,8 +187,7 @@ class WalkEnvironmentRewardCalc:
 		return abs(reward)
 
 	def get_reward_distance(self, position):
-		if position[0] > 0 and self.max_distance_achieve < position[0]:
-			self.max_distance_achieve = position[0]
+		if position[0] > 0:
 			return position[0]
 		else: 
 			return 0
@@ -210,22 +209,17 @@ class WalkEnvironmentRewardCalc:
 		]
 
 		expected_pattern = self.diagonal_walk_patterns[self.current_pattern_index]
-		next_expected_pattern = self.diagonal_walk_patterns[self.current_pattern_index + 1]
 
 		reward = 0
-		contact_force = 0
-		matches = 0
 		self.time_in_pattern += 1
-		for current, expected, next_expected_pattern, feet in zip(current_state, expected_pattern, next_expected_pattern,self.body_feet_indices):
-			contact_force = np.linalg.norm([paw_contact_force[feet][0], paw_contact_force[feet][2]])
-			if current == expected and paw_contact_force[feet][0] >= 3.5 and self.time_in_pattern > 100:
-				matches += 1
-
-		pattern_matches = matches == len(self.body_feet_indices) 
+		if current_state == expected_pattern and data.qvel[0] >= self.desired_velocity_min[0]:
+			pattern_matches = True
+		else:
+			pattern_matches = False
 
 		if pattern_matches:
 			self.time_in_pattern = 0
-			self.consecutive_matches += 1
+			self.consecutive_matches += len(self.diagonal_walk_patterns)
 			reward += self.consecutive_matches
 			self.current_pattern_index = (self.current_pattern_index + 1) % len(self.diagonal_walk_patterns)
 		else:

@@ -5,22 +5,40 @@ from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.logger import configure
+from stable_baselines3.common.monitor import Monitor
 
 from environments.WalkEnvironment import WalkEnvironmentV0
 from environments.JumpEnvironment import JumpEnvironmentV0
 from environments.ScaleActionEnvironment import ScaleActionWrapper
 from .VideoRecorder import VideoRecorderCallback
-import os
+import os	
 
-def create_vec_env(env_id, n_envs, seed=None):
-	base_env_class = WalkEnvironmentV0 if env_id == "walk" else JumpEnvironmentV0
-	vec_env = make_vec_env(
-		lambda: ScaleActionWrapper(base_env_class(render_mode="rgb_array")),
-		n_envs=n_envs,
-		seed=seed,
-		vec_env_cls=SubprocVecEnv
-	)
-	return vec_env
+def create_vec_env(env_id, n_envs, dummy=False, seed=None, monitor_kwargs=None):
+    base_env_class = WalkEnvironmentV0 if env_id == "walk" else JumpEnvironmentV0
+    
+    def make_env_fn():
+        env = base_env_class(render_mode="rgb_array")
+        env = ScaleActionWrapper(env) 
+        if monitor_kwargs: 
+            env = Monitor(env, filename=None, info_keywords=monitor_kwargs)
+        return env
+
+    if dummy:
+        return make_vec_env(
+            lambda: ScaleActionWrapper(base_env_class(render_mode="rgb_array")),
+			n_envs=1,
+            seed=seed,
+            vec_env_cls=DummyVecEnv
+        )
+    
+    vec_env = make_vec_env(
+        make_env_fn,
+        n_envs=n_envs,
+        seed=seed,
+        vec_env_cls=SubprocVecEnv
+    )
+    return vec_env
+
 
 if __name__ == "__main__":
 	parser = ArgumentParser()
@@ -33,22 +51,15 @@ if __name__ == "__main__":
 	parser.add_argument('--seed', type=int, default=0, help="Random seed for reproducibility")
 	args = parser.parse_args()
 
-	vec_env = create_vec_env(args.motion, args.n_envs, seed=args.seed)
+	monitor_info_keywords = ('patterns_matches', 'x_position', 'distance_from_origin')
+
+	vec_env = create_vec_env(args.motion, args.n_envs, seed=args.seed, monitor_kwargs=monitor_info_keywords)
 	eval_env = create_vec_env(args.motion, args.n_envs, seed=args.seed)
-	record_env = create_vec_env(args.motion, n_envs=1, seed=args.seed)
+	record_env = create_vec_env(args.motion, dummy=True ,n_envs=1, seed=args.seed)
 
-	print("Action space vec_env :", vec_env.action_space)
-	print("Observation space vec_env :", vec_env.observation_space)
+	current_time = datetime.now().strftime("%Y%m%d-%H%M%S")
 
-	print("Action space eval_env :", vec_env.action_space)
-	print("Observation space eval_env :", vec_env.observation_space)
-
-	print("Action space record_env :", vec_env.action_space)
-	print("Observation space record_env :", vec_env.observation_space)
-
-
-	# Directorios de salida
-	tensorboard_dir = f"./ppo_robot_tensorboard/{args.motion}/"
+	tensorboard_dir = f"./ppo_robot_tensorboard/{args.motion}_{current_time}/"
 	video_output_dir = f"./videos/{args.motion}/"
 	model_output_dir = f"./models/{args.motion}/"
 	best_model_path = os.path.join(model_output_dir, "best_model")
@@ -65,7 +76,7 @@ if __name__ == "__main__":
 		batch_size=512,                  # Tamaño de batch
 		n_epochs=10,                     # Épocas de optimización por iteración
 		gamma=0.99,                      # Factor de descuento
-		ent_coef=0.019,                   # Fomenta exploración
+		ent_coef=0.025,                   # Fomenta exploración
 		clip_range=0.2,                  # Clipping de políticas
 		max_grad_norm=0.5,               # Evita gradientes explosivos
 		tensorboard_log=tensorboard_dir  # Monitorización
@@ -84,14 +95,12 @@ if __name__ == "__main__":
 		eval_env=eval_env,
 		best_model_save_path=best_model_path,
 		eval_freq=int(args.evaluation_frequency),
-		n_eval_episodes=5,
-		deterministic=False,
+		n_eval_episodes=20,
+		deterministic=True,
 		verbose=1
 	)
 
 	try:
-		new_logger = configure("./tmp/training_logs", ["stdout", "csv", "tensorboard"])
-		model.set_logger(new_logger)
 		model.learn(
 			total_timesteps = 30000000,
 			callback=[video_callback, eval_callback],
