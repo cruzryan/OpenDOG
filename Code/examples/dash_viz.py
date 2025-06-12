@@ -10,14 +10,16 @@ from flask import Flask, render_template
 from flask_socketio import SocketIO, emit
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
-code_dir = os.path.dirname(script_dir)
+code_dir = os.path.dirname(script_dir) + "\quadpilot" # This is the parent directory
 if code_dir not in sys.path:
     sys.path.insert(0, code_dir)
 
 try:
-    from quadpilot import QuadPilotBody
+    # Assuming quadpilot.py is in the 'code_dir' (parent directory)
+    from body import QuadPilotBody
 except ImportError:
-    print(f"ERROR: Could not import QuadPilotBody from 'quadpilot.py'. Ensure 'quadpilot.py' is in: {code_dir}")
+    print(f"ERROR: Could not import QuadPilotBody from 'quadpilot.py'. "
+          f"Ensure 'quadpilot.py' is in the directory: {code_dir}")
     sys.exit(1)
 
 app = Flask(__name__)

@@ -521,8 +521,8 @@ CALIBRATION_ANGLE_ZERO = 0.0
 CAL_KP = 0.9
 CAL_KI = 0.0 # Keep I low or zero for calibration to avoid integral windup at limits
 CAL_KD = 0.3
-CAL_DEAD_ZONE = 5 # Pixels/counts - This will be *overridden* by backsplash measurement, but set reasonably
-CAL_POS_THRESHOLD = 5 # Pixels/counts - This affects when controller considers 'on target'
+CAL_DEAD_ZONE = 15 # Pixels/counts - This will be *overridden* by backsplash measurement, but set reasonably
+CAL_POS_THRESHOLD = 0 # Pixels/counts - This affects when controller considers 'on target'
 
 # Parameters for detecting stability and movement from encoder data
 STABILITY_WINDOW_SIZE = 10 # Number of recent readings to check for stability
@@ -530,7 +530,7 @@ STABILITY_THRESHOLD_COUNTS = 2 # Max allowed difference in counts over the windo
 
 # Parameters for velocity-based movement start detection
 VELOCITY_SMOOTHING_WINDOW = 8 # Number of recent velocity samples to average
-EXPECTED_VELOCITY_THRESHOLD = 75 # Minimum smoothed velocity (counts/sec) to register movement start (Tune this!)
+EXPECTED_VELOCITY_THRESHOLD = 5 # Minimum smoothed velocity (counts/sec) to register movement start (Tune this!)
 
 # Timeouts for calibration steps
 WAIT_FOR_DATA_TIMEOUT = 5.0 # Max time to wait for first data packet

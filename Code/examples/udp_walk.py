@@ -7,15 +7,14 @@ import threading
 import json # For loading walk sequence
 from pynput import keyboard
 
-# Add the code directory (parent of this script's directory) to sys.path
 script_dir = os.path.dirname(os.path.abspath(__file__))
-code_dir = os.path.dirname(script_dir) # This is the parent directory
+code_dir = os.path.dirname(script_dir) + "\quadpilot" # This is the parent directory
 if code_dir not in sys.path:
     sys.path.insert(0, code_dir)
 
 try:
     # Assuming quadpilot.py is in the 'code_dir' (parent directory)
-    from quadpilot import QuadPilotBody
+    from body import QuadPilotBody
 except ImportError:
     print(f"ERROR: Could not import QuadPilotBody from 'quadpilot.py'. "
           f"Ensure 'quadpilot.py' is in the directory: {code_dir}")
@@ -79,7 +78,7 @@ try:
     print("QuadPilotBody (command instance) initialized.")
 
     print("Setting initial control parameters...")
-    if not body_controller.set_control_params(P=0.9, I=0.0, D=0.9, dead_zone=5, pos_thresh=5):
+    if not body_controller.set_control_params(P=1.5, I=0.0, D=0.3, dead_zone=5, pos_thresh=5):
         raise Exception("Failed to set control parameters.")
     print("Control parameters set.")
     time.sleep(0.1)
@@ -307,7 +306,7 @@ def on_key_press(key):
             elif char == 'd': # Set zero pose
                 print("\nAttempting to set zero pose ('d')...")
                 set_manual_angles_action([0.0] * NUM_MOTORS)
-            elif char == 'w': # Start walk sequence
+            elif char == 'o': # Start walk sequence
                 if walk_sequence:
                     is_walking = True # Set flag *before* starting thread
                     print("\n'w' pressed. Starting walk sequence in a new thread...")

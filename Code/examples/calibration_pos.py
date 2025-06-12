@@ -461,7 +461,7 @@ CALIBRATION_ANGLE_ZERO = 0.0
 CAL_KP = 0.9
 CAL_KI = 0.0 # Keep I low or zero for calibration to avoid integral windup at limits
 CAL_KD = 0.3
-CAL_DEAD_ZONE = 5 # Pixels/counts
+CAL_DEAD_ZONE = 10 # Pixels/counts
 CAL_POS_THRESHOLD = 5 # Pixels/counts (for PID)
 
 # Parameters for detecting stability and movement from encoder data

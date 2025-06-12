@@ -127,7 +127,7 @@
 </head>
 <body>
     <div class="dashboard-header">
-        <h1>Quadruped Dashboard</h1>
+        <h1>QuadPilot Dashboard</h1>
         <div class="status-bar">
             <span><span id="ws-status-dot" class="status-dot"></span> WebSocket: <span id="ws-status">Connecting...</span></span>
             <span>UI Update Interval: <span id="ui-update-interval-value" class="current-value-display">(- ms)</span></span>
@@ -136,13 +136,13 @@
     </div>
 
     <div class="controls-panel">
-        <button id="init-robot-btn" class="control-button"><span class="icon">⚙️</span>Initialize</button>
-        <button id="toggle-control-btn" class="control-button"><span class="icon">⚡</span>Enable Control</button>
-        <button id="reset-hw-btn" class="control-button"><span class="icon">🔄</span>Reset HW</button>
+        <button id="init-robot-btn" class="control-button"><span class="icon">⚙️</span>Conectar</button>
+        <button id="toggle-control-btn" class="control-button"><span class="icon">⚡</span>Prender Control</button>
+        <button id="reset-hw-btn" class="control-button"><span class="icon">🔄</span>Reiniciar ángulos</button>
         <div class="motor-control">
             <select id="motor-select"></select>
             <input type="number" id="motor-angle-input" value="0" min="-180" max="180" step="1">
-            <button id="send-angle-btn"><span class="icon">➡️</span>Set</button>
+            <button id="send-angle-btn"><span class="icon">➡️</span>Mover motor</button>
         </div>
     </div>
     <div id="command-status-msg" class="command-status"></div>
@@ -289,7 +289,7 @@
         const sendAngleBtn = document.getElementById('send-angle-btn'); const motorAngleInputEl = document.getElementById('motor-angle-input');
         if (sendAngleBtn && motorSelectEl && motorAngleInputEl) { sendAngleBtn.addEventListener('click', () => { const motorId = parseInt(motorSelectEl.value); const angle = parseFloat(motorAngleInputEl.value); if (!isNaN(motorId) && !isNaN(angle)) { if (!clientSideControlEnabled) { alert("Control is disabled."); return; } let anglesToSend = [...currentMotorTargetAngles]; anglesToSend[motorId] = angle; socket.emit('request_set_angles', { angles: anglesToSend }); } });}
 
-        function updateToggleButtonText() { if (toggleControlBtn) { if (clientSideControlEnabled) { toggleControlBtn.innerHTML = '<span class="icon">🚫</span>Disable Control'; } else { toggleControlBtn.innerHTML = '<span class="icon">⚡</span>Enable Control'; } } }
+        function updateToggleButtonText() { if (toggleControlBtn) { if (clientSideControlEnabled) { toggleControlBtn.innerHTML = '<span class="icon">🚫</span>Apagar control'; } else { toggleControlBtn.innerHTML = '<span class="icon">⚡</span>Activar control'; } } }
 
         function chartOptions(custom = {}) {
             return {

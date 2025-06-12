@@ -7,17 +7,18 @@ import threading
 
 # Add the code directory (parent of this script's directory) to sys.path
 script_dir = os.path.dirname(os.path.abspath(__file__))
-code_dir = os.path.dirname(script_dir) # This is the parent directory
+code_dir = os.path.dirname(script_dir) + "\quadpilot" # This is the parent directory
 if code_dir not in sys.path:
     sys.path.insert(0, code_dir)
 
 try:
     # Assuming quadpilot.py is in the 'code_dir' (parent directory)
-    from quadpilot import QuadPilotBody
+    from body import QuadPilotBody
 except ImportError:
     print(f"ERROR: Could not import QuadPilotBody from 'quadpilot.py'. "
           f"Ensure 'quadpilot.py' is in the directory: {code_dir}")
     sys.exit(1)
+
 
 # --- Motor Name Configuration (for display purposes) ---
 MOTOR_NAMES = [
