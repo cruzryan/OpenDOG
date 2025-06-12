@@ -12,6 +12,53 @@ from environments.JumpEnvironment import JumpEnvironmentV0
 from environments.ScaleActionEnvironment import ScaleActionWrapper
 from .VideoRecorder import VideoRecorderCallback
 import os	
+import numpy as np
+
+from stable_baselines3.common.callbacks import BaseCallback
+import numpy as np
+
+class CustomLoggingCallback(BaseCallback):
+    def __init__(self, verbose=0):
+        super().__init__(verbose)
+        self.custom_metrics = {
+            "x_position": [],
+            "y_position": [],
+            "distance_from_origin": [],
+            "patterns_matches": [],
+            # Agrega aquí otras métricas
+        }
+
+    def _on_step(self) -> bool:
+        # Recopilar métricas de todos los entornos
+        for i, info in enumerate(self.locals['infos']):
+            for key in self.custom_metrics.keys():
+                if key in info:
+                    self.custom_metrics[key].append(info[key])
+        
+        # Registrar cada 100 pasos (ajustable)
+        if self.n_calls % 100 == 0:
+            for metric, values in self.custom_metrics.items():
+                if values:
+                    self.logger.record(f"custom/{metric}", np.mean(values))
+                    values.clear()  # Resetear para el próximo lote
+        return True
+
+class CustomEvalCallback(EvalCallback):
+    def _on_step(self) -> bool:
+        result = super()._on_step()
+        if result and self.n_calls % self.eval_freq == 0:
+            # Recopilar métricas durante la evaluación
+            all_infos = []
+            for _ in range(self.n_eval_episodes):
+                _, _, _, infos = self.model.env.step_wait()
+                all_infos.extend(infos)
+            
+            for key in ["x_position", "y_position", ...]:
+                values = [info.get(key, 0) for info in all_infos if key in info]
+                if values:
+                    self.logger.record(f"eval/{key}", np.mean(values))
+        return result
+
 
 def create_vec_env(env_id, n_envs, dummy=False, seed=None, monitor_kwargs=None):
     base_env_class = WalkEnvironmentV0 if env_id == "walk" else JumpEnvironmentV0
@@ -51,7 +98,7 @@ if __name__ == "__main__":
 	parser.add_argument('--seed', type=int, default=0, help="Random seed for reproducibility")
 	args = parser.parse_args()
 
-	monitor_info_keywords = ('patterns_matches', 'x_position', 'distance_from_origin')
+	monitor_info_keywords = ("x_position", "y_position", "distance_from_origin", "paw_contact_forces", "patterns_matches")
 
 	vec_env = create_vec_env(args.motion, args.n_envs, seed=args.seed, monitor_kwargs=monitor_info_keywords)
 	eval_env = create_vec_env(args.motion, args.n_envs, seed=args.seed)
@@ -76,7 +123,7 @@ if __name__ == "__main__":
 		batch_size=512,                  # Tamaño de batch
 		n_epochs=10,                     # Épocas de optimización por iteración
 		gamma=0.99,                      # Factor de descuento
-		ent_coef=0.025,                   # Fomenta exploración
+		ent_coef=0.005,                   # Fomenta exploración
 		clip_range=0.2,                  # Clipping de políticas
 		max_grad_norm=0.5,               # Evita gradientes explosivos
 		tensorboard_log=tensorboard_dir  # Monitorización
@@ -91,7 +138,8 @@ if __name__ == "__main__":
 		duration=args.duration
 	)				
 
-	eval_callback = EvalCallback(
+	custom_log_callback = CustomLoggingCallback()
+	eval_callback = CustomEvalCallback(  # Reemplaza el EvalCallback original
 		eval_env=eval_env,
 		best_model_save_path=best_model_path,
 		eval_freq=int(args.evaluation_frequency),
@@ -100,10 +148,11 @@ if __name__ == "__main__":
 		verbose=1
 	)
 
+	
 	try:
 		model.learn(
 			total_timesteps = 30000000,
-			callback=[video_callback, eval_callback],
+			callback=[custom_log_callback, video_callback, eval_callback],
 			reset_num_timesteps=False,
 			progress_bar=True
 		)

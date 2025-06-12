@@ -26,8 +26,8 @@ def test_model(env, motion):
 	j = 0
 
 	patterns = []	
-	for i in range(500):
-		action, _states = model.predict(obs, deterministic=True)
+	for i in range(5000):
+		action, _states = model.predict(obs, deterministic=False)
 
 		print(f"Action: {action}")
 		print(f"States: {_states}")

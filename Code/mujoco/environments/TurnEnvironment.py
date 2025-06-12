@@ -1,8 +1,8 @@
-from gymnasium.envs.mujoco import MujocoEnv
-from gymnasium import spaces
-
 import numpy as np
-from rewards.walk_environment_reward_calc import WalkEnvironmentRewardCalc
+from gymnasium import spaces
+from gymnasium.envs.mujoco import MujocoEnv
+
+from rewards.TurnRewwardCalc import TurnRewwardCalc
 
 """
 See mjvCamera_ structure in mujoco documentation
@@ -23,7 +23,7 @@ DEFAULT_CAMERA_CONFIG = {
 	"orthographic": 0
 }
 
-class WalkEnvironmentV0(MujocoEnv):
+class TurnEnvironment(MujocoEnv):
 
 	metadata = {
 		"render_modes": ["human", "rgb_array", "depth_array"],
@@ -38,7 +38,7 @@ class WalkEnvironmentV0(MujocoEnv):
 			default_camera_config=DEFAULT_CAMERA_CONFIG,
 		)
 
-		self.utils = WalkEnvironmentRewardCalc( 
+		self.utils = TurnRewwardCalc( 
 			gravity=self.model.opt.gravity,
 			default_joint_position=self.model.key_ctrl[0],
 			actuator_range=self.model.actuator_ctrlrange)
@@ -66,9 +66,9 @@ class WalkEnvironmentV0(MujocoEnv):
 			"x_position": self.data.qpos[0],
 			"y_position": self.data.qpos[1],
 			"distance_from_origin": np.linalg.norm(self.data.qpos[0:2], ord=2),
-			"paw_contact_forces": self.utils.get_paw_contact_forces(self.data, self.model),
-			"patterns_matches": self.utils.diagonal_gait_reward(self.data, self.model),
 			**reward_info,
+			"paw_contact_forces": self.utils.get_paw_contact_forces(self.data, self.model),
+			"patterns_matches": self.utils.diagonal_gait_reward(self.data, self.model)
 		}
 
 		if self.render_mode == "human" and (self.data.time - self._last_render_time) > (1.0 / self.metadata["render_fps"]):
@@ -83,8 +83,6 @@ class WalkEnvironmentV0(MujocoEnv):
 		costs = self._calculate_negative_costs(action)
 		reward = max(0.0, rewards - costs)
 		
-		#self._debug_rewards_costs(rewards, costs)
-
 		reward_info = {
 			"linear_vel_tracking_reward": self.utils.get_linear_velocity_tracking_reward(self.data.qvel[:2], self.data.qpos[0]),
 			"reward_ctrl": self.utils.torque_cost(self.data.qfrc_actuator[-8:]),
@@ -94,6 +92,12 @@ class WalkEnvironmentV0(MujocoEnv):
 		return reward, reward_info
 	
 	def _calculate_positive_rewards(self):
+		# print("Debug de linear_vel_tracking", self.utils.get_linear_velocity_tracking_reward(self.data.qvel[:2], self.data.qpos[0]) * self.utils.reward_weights["linear_vel_tracking"])
+		# print("Debug de healthy", self.utils.get_reward_safe_range(self.data.qpos, self.data.qvel) * self.utils.reward_weights["healthy"])
+		# print("Debug de angular_vel_tracking", self.utils.get_angular_velocity_tracking_reward(self.data.qvel[5]) * self.utils.reward_weights["angular_vel_tracking"])
+		# print("Debug de diagonal_gait_reward", self.utils.diagonal_gait_reward(self.data, self.model) * self.utils.reward_weights["diagonal_gait_reward"])
+		# print("Debug de feet_airtime", self.utils.feet_air_time_reward(self.dt, self.data, self.model) * self.utils.reward_weights["feet_airtime"])
+
 		return (
 			+ self.utils.get_linear_velocity_tracking_reward(self.data.qvel[:2], self.data.qpos[0]) * self.utils.reward_weights["linear_vel_tracking"]
 			+ self.utils.get_reward_safe_range(self.data.qpos, self.data.qvel) * self.utils.reward_weights["healthy"]
@@ -102,6 +106,12 @@ class WalkEnvironmentV0(MujocoEnv):
 
 	#+ 
 	def _calculate_negative_costs(self, action):
+		# print("Debug de torque", self.utils.torque_cost(self.data.qfrc_actuator[-8:]) * self.utils.cost_weights["torque"])
+		# print("Debug de action_rate", self.utils.action_rate_cost(action) * self.utils.cost_weights["action_rate"])
+		# print("Debug de vertical_vel", self.utils.vertical_velocity_cost(self.data.qvel[2]) * self.utils.cost_weights["vertical_vel"])
+		# print("Debug de cost_distance", self.utils.get_cost_distance(self.data.qpos, self.dt) * self.utils.cost_weights["cost_distance"])
+		# print("Debug de default_joint_position_cost", self.utils.default_joint_position_cost(self.data.qpos[7:]) * self.utils.cost_weights["default_joint_position"])
+		# + 
 		return (
 			+ self.utils.default_joint_position_cost(self.data.qpos[7:]) * self.utils.cost_weights["default_joint_position"]
 			+ self.utils.action_rate_cost(action) * self.utils.cost_weights["action_rate"]
