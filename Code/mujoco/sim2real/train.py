@@ -70,7 +70,7 @@ POLICY_UPDATE_INTERVAL = 2048
 NUM_EPOCHS_PER_UPDATE = 10
 
 # Refined Leg Position Penalty Hyperparameters
-LEG_AT_HOME_THRESHOLD_DEG = 5.0
+LEG_AT_HOME_THRESHOLD_DEG = 15.0
 MOVING_LEG_MAX_DEVIATION_DEG = 40.0
 LEG_POSITIONING_PENALTY = 0.5 # Per leg not meeting its phase-specific criteria
 

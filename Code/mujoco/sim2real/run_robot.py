@@ -68,8 +68,8 @@ for i, act_name in enumerate(NN_ACTUATOR_ORDER):
     ROBOT_HOME_Q_RAD_BY_NN_ORDER[i] = np.radians(ROBOT_HOME_Q_DEG_BY_MOTOR_IDX[motor_idx])
 
 ROBOT_JOINT_LIMITS_DEG_BY_MOTOR_IDX = [
-    (-85.0, 85.0), (-85.0, 85.0), (-85.0, 85.0), (-85.0, 85.0),
-    (-85.0, 85.0), (-85.0, 85.0), (-85.0, 85.0), (-85.0, 85.0),
+    (-45.0, 45.0), (-45.0, 45.0), (-45.0, 45.0), (-45.0, 45.0),
+    (-45.0, 45.0), (-45.0, 45.0), (-45.0, 45.0), (-45.0, 45.0),
 ] 
 
 # --- Global State Variables ---
@@ -216,7 +216,7 @@ def perform_single_nn_inference_step():
 
     action_deltas_rad_nn_order = normalized_actions_nn_order * ACTION_AMPLITUDE_RAD
     # target_q_rad_nn_order = action_deltas_rad_nn_order
-    target_q_rad_nn_order = ROBOT_HOME_Q_RAD_BY_NN_ORDER + action_deltas_rad_nn_order
+    target_q_rad_nn_order =  action_deltas_rad_nn_order
     
     target_q_deg_robot_order = [0.0] * NUM_MOTORS
     print( "--- Target Angles Sent to Robot (deg) ---")

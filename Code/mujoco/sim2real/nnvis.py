@@ -556,7 +556,7 @@ def run_simulation_and_visualize_intuitive(agent, env, device, num_steps=1000, p
         g_dynamic_render_active = False
 
 if __name__ == "__main__":
-    MODEL_LOAD_PATH = 'quadruped_ac_sym_ep7900.pth'
+    MODEL_LOAD_PATH = './best/quadruped_ac_terrain_ep6800.pth'
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {DEVICE}")
 

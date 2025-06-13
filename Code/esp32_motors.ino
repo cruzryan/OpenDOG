@@ -100,7 +100,7 @@ void IRAM_ATTR handleEncoderA(void* arg) {
 void IRAM_ATTR handleEncoderB(void* arg) {
     Motor* motor = (Motor*)arg;
     unsigned long now = micros();
-    if (now - motor->lastBChange < 1000) return;
+    if (now - motor->lastBChange < 1000) return; // FIX THISSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
     motor->lastBChange = now;
     bool encAVal = digitalRead(motor->ENCODER_A);
     bool encBVal = digitalRead(motor->ENCODER_B);

@@ -202,6 +202,12 @@ class QuadrupedEnv:
 
     def _generate_random_terrain(self): # Modified for proper circular flat area with chaos beyond
         if self.hfield_id == -1: return
+        # 50% probability of flat terrain
+        if random.random() < 0.5:
+            self.model.hfield_data[:] = 0.5  # Flat normalized height
+            mujoco.mj_resetData(self.model, self.data)
+            self.sync_viewer_if_active()
+            return
         height_data_raw = np.zeros((TERRAIN_ROWS, TERRAIN_COLS), dtype=np.float32)
         hfield_world_pos_x = self.hfield_geom_pos[0]
         hfield_world_pos_y = self.hfield_geom_pos[1]
@@ -350,10 +356,12 @@ class QuadrupedEnv:
         
         # New reward term for instantaneous step displacement
         reward_step_displacement = 0.0
-        if dx > 0: reward_step_displacement = 50.0 * dx # Reward for forward displacement
+        if dx > 0: reward_step_displacement = 70.0 * dx # Reward for forward displacement
         elif dx < 0.0005: reward_step_displacement = -1.0  # Penalty for backward displacement (dx is negative)
 
         reward_alive=0.005; penalty_sideways_velocity=-0.3*abs(self.data.qvel[1]); penalty_y_position_stability=-0.15*abs(self.data.qpos[1]-self.initial_body_y_pos_home)
+        # Additional penalty for y velocity
+        penalty_y_velocity = -0.5 * abs(self.data.qvel[1])
         
         z_dev_settled = self.data.qpos[2] - self.current_initial_body_z_pos
         z_dev_ideal = self.data.qpos[2] - self.initial_body_z_pos_on_flat
@@ -379,6 +387,7 @@ class QuadrupedEnv:
             penalty_backward_velocity +
             reward_alive + 0.01 + # Increased reward for staying alive
             penalty_sideways_velocity +
+            penalty_y_velocity + # New penalty for y velocity
             penalty_y_position_stability +
             penalty_z_position_stability +
             penalty_orientation_error +
@@ -389,7 +398,7 @@ class QuadrupedEnv:
         done=False; info={"sim_target_rad":f_cmds.copy(),"termination_reason":"max_steps"}
         if sum_e>0: tot_r-=50.0; done=True; info["mj_error"]=True; info["termination_reason"]="mj_error" # Increased penalty
         if not done and (abs(cr)>ORIENTATION_TERMINATION_LIMIT_RAD or abs(cp)>ORIENTATION_TERMINATION_LIMIT_RAD or abs(cy)>ORIENTATION_TERMINATION_LIMIT_RAD*1.5):
-            tot_r-=100.0; done=True; info["termination_reason"]="orientation_limit" # Increased penalty
+            tot_r-=150; done=True; info["termination_reason"]="orientation_limit" # Increased penalty
         if not done and self.cumulative_positive_x_displacement>MIN_FWD_DISPLACEMENT_FOR_BACKWARD_CHECK and self.cumulative_negative_x_displacement > 0.85*self.cumulative_positive_x_displacement:
             tot_r-=50.0; done=True; info["termination_reason"]="too_much_backward" # Increased penalty
         
