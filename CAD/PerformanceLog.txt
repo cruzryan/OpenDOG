@@ -1,0 +1,2 @@
+Number of Contacts: 17
+Number of contact data: 10995

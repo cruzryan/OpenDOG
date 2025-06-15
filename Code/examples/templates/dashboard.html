@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Quadruped Dashboard (DMP + Path)</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #ffffff; --card-bg-color: #f9f9f9; --border-color: #e0e0e0;
+            --text-color: #333333; --text-muted-color: #777777; --accent-color: #000000;
+            --icon-color: #333333; --button-text-color: #ffffff; --button-bg-color: #000000;
+            --success-color: #28a745; --error-color: #dc3545;
+            /* --graph-line-color: #000000; */ /* Old */
+            --graph-line-color: #007bff; /* NEW: Blue for graphs */
+            --graph-grid-color: #eeeeee; --path-color: #007bff; --arrow-color: #dc3545;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 0; padding: 20px; background-color: var(--bg-color); color: var(--text-color);
+            display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+            box-sizing: border-box; overflow-x: hidden;
+        }
+        .dashboard-header { width: 100%; max-width: 1800px; text-align: center; margin-bottom: 15px; }
+        .dashboard-header h1 { color: var(--accent-color); margin-bottom: 5px; font-size: 2.2em; font-weight: 600;}
+        .status-bar { font-size: 0.9em; color: var(--text-muted-color); margin-bottom: 15px; display: flex; justify-content: center; align-items: center; gap: 20px;}
+        .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; }
+
+        .controls-panel {
+            display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 12px;
+            background-color: var(--card-bg-color); padding: 15px; border-radius: 8px;
+            border: 1px solid var(--border-color); margin-bottom: 20px; width: 100%; max-width: 1200px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .control-button, .motor-control select, .motor-control input, .motor-control button {
+            background-color: var(--button-bg-color); color: var(--button-text-color); border: none;
+            padding: 10px 15px; border-radius: 6px; cursor: pointer; font-size: 0.9em; font-weight: 500;
+            display: flex; align-items: center; gap: 8px; transition: background-color 0.2s ease;
+        }
+        .control-button:hover, .motor-control button:hover { background-color: #333333; }
+        .motor-control { display: flex; gap: 8px; align-items: center; }
+        .motor-control select, .motor-control input[type="number"] { background-color: #fff; color: var(--text-color); border: 1px solid var(--border-color); padding: 9px; border-radius: 6px;}
+        .motor-control input[type="number"] { width: 70px; text-align: right; }
+
+        .main-content-area {
+            display: flex;
+            flex-direction: column;
+            gap: 20px; width: 100%; max-width: 1800px;
+        }
+        .info-cards-row, .path-trace-row {
+            display: grid;
+            gap: 20px;
+            width: 100%;
+        }
+        .info-cards-row {
+            grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+        }
+        .path-trace-row {
+             grid-template-columns: repeat(auto-fit, minmax(calc(50% - 10px), 1fr));
+        }
+         @media (max-width: 1200px) {
+            .path-trace-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+
+        .leg-cards-grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 20px;
+            width: 100%;
+        }
+        .grid-card {
+            background-color: #ffffff; border: 1px solid var(--border-color);
+            border-radius: 8px; padding: 15px;
+            display: flex; flex-direction: column;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.07); min-height: 200px;
+        }
+        .grid-card h2 { color: var(--accent-color); font-size: 1.0em; font-weight: 600; margin-top: 0; margin-bottom: 10px; text-align: left; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;}
+        .grid-card h3 { font-size: 0.9em; font-weight: 500; margin-top: 10px; margin-bottom: 5px; color: var(--text-color); }
+
+        .esp-info-card .dmp-section { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom:10px; }
+        .dmp-canvas-container {
+            width: 450px; height: 450px; border: 1px solid var(--border-color);
+            background-color: #f0f0f0; margin-bottom: 5px;
+            margin-left: auto; margin-right: auto;
+        }
+        .dmp-text-data p { margin: 2px 0; font-size: 0.85em; color: var(--text-muted-color); text-align: center; }
+        .dmp-text-data p strong { color: var(--text-color); font-weight: 500;}
+
+        .path-trace-card {
+            min-height: 500px;
+        }
+        .path-trace-section { margin-top: 10px; display: flex; flex-direction: column; align-items: center; flex-grow: 1;}
+        .path-trace-canvas-container {
+            width: 98%;
+            flex-grow: 1;
+            border: 1px solid var(--border-color);
+            background-color: #f8f8f8;
+            margin-bottom: 10px;
+            position: relative;
+            min-height: 400px;
+        }
+        .path-trace-canvas-container canvas { display: block; width: 100%; height: 100%;}
+        .path-trace-controls { display: flex; justify-content: space-between; width: 98%; margin-bottom: 5px; align-items: center;}
+        .path-trace-info { width: 98%; text-align: center; }
+        .path-trace-info p { margin: 2px 0; font-size: 0.8em; color: var(--text-muted-color); }
+
+
+        .data-age-card h2, .leg-card h2 { display: flex; justify-content: space-between; align-items: center; }
+        .current-value-display { font-size: 0.85em; color: var(--text-muted-color); font-weight: normal; }
+
+        .chart-container { height: 150px; }
+        .motor-leg-charts-container { display: flex; flex-direction: column; gap: 10px; flex-grow: 1; }
+        .motor-chart-item { height: 120px;  }
+
+        .command-status { font-size: 0.9em; margin-top: 8px; height: 20px; text-align: center; width: 100%; font-weight: 500;}
+        .icon { font-size: 1.2em; }
+
+        @media (min-width: 700px) {
+             .leg-cards-grid-container.layout-2x2 {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-header">
+        <h1>QuadPilot Dashboard</h1>
+        <div class="status-bar">
+            <span><span id="ws-status-dot" class="status-dot"></span> WebSocket: <span id="ws-status">Connecting...</span></span>
+            <span>UI Update Interval: <span id="ui-update-interval-value" class="current-value-display">(- ms)</span></span>
+            <span>Last Data: <span id="last-update-time">-</span></span>
+        </div>
+    </div>
+
+    <div class="controls-panel">
+        <button id="init-robot-btn" class="control-button"><span class="icon">⚙️</span>Conectar</button>
+        <button id="toggle-control-btn" class="control-button"><span class="icon">⚡</span>Prender Control</button>
+        <button id="reset-hw-btn" class="control-button"><span class="icon">🔄</span>Reiniciar ángulos</button>
+        <div class="motor-control">
+            <select id="motor-select"></select>
+            <input type="number" id="motor-angle-input" value="0" min="-180" max="180" step="1">
+            <button id="send-angle-btn"><span class="icon">➡️</span>Mover motor</button>
+        </div>
+    </div>
+    <div id="command-status-msg" class="command-status"></div>
+
+    <div class="main-content-area" id="main-content-area">
+        <div class="info-cards-row">
+            <div id="esp0-column" class="grid-card esp-info-card" style="display:none;">
+                <h2>ESP 1 (<span id="esp0-ip">-</span>) <span id="esp0-data-status" class="status-dot"></span></h2>
+                <div id="esp0-dmp-section" class="dmp-section" style="display:none;">
+                    <h3>DMP Orientation & Data</h3>
+                    <div id="dmpCubeContainer-esp0" class="dmp-canvas-container"></div>
+                    <div id="esp0-dmp-text" class="dmp-text-data"></div>
+                </div>
+                <div class="data-age-section">
+                    <h3>Data Freshness <span id="esp0-data-age-value" class="current-value-display">(- ms)</span></h3>
+                    <div class="chart-container"><canvas id="esp0DataAgeChart"></canvas></div>
+                </div>
+            </div>
+            <div id="esp1-column" class="grid-card esp-info-card" style="display:none;">
+                <h2>ESP 2 (<span id="esp1-ip">-</span>) <span id="esp1-data-status" class="status-dot"></span></h2>
+                <div id="esp1-dmp-section" class="dmp-section" style="display:none;">
+                    <h3>DMP Orientation & Data</h3>
+                    <div id="dmpCubeContainer-esp1" class="dmp-canvas-container"></div>
+                    <div id="esp1-dmp-text" class="dmp-text-data"></div>
+                </div>
+                 <div class="data-age-section">
+                    <h3>Data Freshness <span id="esp1-data-age-value" class="current-value-display">(- ms)</span></h3>
+                    <div class="chart-container"><canvas id="esp1DataAgeChart"></canvas></div>
+                </div>
+            </div>
+            <div class="grid-card ui-interval-card">
+                 <h2>UI Update Interval <span id="uiUpdateIntervalChartValue" class="current-value-display">(- ms)</span></h2>
+                <div class="chart-container"><canvas id="uiUpdateIntervalChart"></canvas></div>
+            </div>
+        </div>
+
+        <div class="path-trace-row">
+            <div id="esp0-path-trace-card" class="grid-card path-trace-card" style="display:none;">
+                <h2>ESP 1 Path Trace</h2>
+                <div id="esp0-path-trace-section" class="path-trace-section">
+                    <div class="path-trace-controls">
+                        <button id="resetPathBtn-esp0" class="control-button" style="padding: 5px 10px; font-size: 0.8em;">Reset Path</button>
+                        <span style="font-size:0.8em;">Scale (px/m): <input type="number" id="pathScale-esp0" value="2000" min="10" max="5000" step="10" style="width:60px; padding: 3px;"></span>
+                        <span style="font-size:0.8em;">Last Update: <span id="pathLastUpdate-esp0">-</span></span>
+                    </div>
+                    <div id="pathTraceCanvasContainer-esp0" class="path-trace-canvas-container">
+                        <canvas id="pathTraceCanvas-esp0"></canvas>
+                    </div>
+                    <div id="esp0-path-info" class="path-trace-info"></div>
+                </div>
+            </div>
+            <div id="esp1-path-trace-card" class="grid-card path-trace-card" style="display:none;">
+                 <h2>ESP 2 Path Trace</h2>
+                <div id="esp1-path-trace-section" class="path-trace-section">
+                     <div class="path-trace-controls">
+                        <button id="resetPathBtn-esp1" class="control-button" style="padding: 5px 10px; font-size: 0.8em;">Reset Path</button>
+                        <span style="font-size:0.8em;">Scale (px/m): <input type="number" id="pathScale-esp1" value="200" min="10" max="1000" step="10" style="width:60px; padding: 3px;"></span>
+                        <span style="font-size:0.8em;">Last Update: <span id="pathLastUpdate-esp1">-</span></span>
+                    </div>
+                    <div id="pathTraceCanvasContainer-esp1" class="path-trace-canvas-container">
+                        <canvas id="pathTraceCanvas-esp1"></canvas>
+                    </div>
+                    <div id="esp1-path-info" class="path-trace-info"></div>
+                </div>
+            </div>
+        </div>
+
+
+        <div class="leg-cards-grid-container layout-2x2" id="leg-cards-grid-container">
+        </div>
+    </div>
+
+    <script>
+        function getCssVariableValue(variableName) { return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim(); }
+
+        let motorConfigListFromPython = []; let legsOrderFromPython = [];
+        try { const rmcj = '{{ motor_config_list_json | safe }}'; if (rmcj && rmcj!=='None'&&rmcj.trim()!==''&&rmcj!=='null') motorConfigListFromPython=JSON.parse(rmcj); else console.warn("motor_cfg empty",rmcj); } catch (e) { console.error("Err motor_cfg",e, '{{ motor_config_list_json | safe }}'); }
+        try { const rloj = '{{ legs_order_list_json | safe }}'; if (rloj && rloj!=='None'&&rloj.trim()!==''&&rloj!=='null') legsOrderFromPython=JSON.parse(rloj); else console.warn("legs_order empty",rloj); } catch (e) { console.error("Err legs_order",e, '{{ legs_order_list_json | safe }}'); }
+
+        const numMotors = motorConfigListFromPython.length;
+
+        const wsStatusEl = document.getElementById('ws-status'); const wsStatusDotEl = document.getElementById('ws-status-dot');
+        const motorSelectEl = document.getElementById('motor-select');
+        const toggleControlBtn = document.getElementById('toggle-control-btn');
+        const uiUpdateIntervalValueEl = document.getElementById('uiUpdateIntervalChartValue');
+        const legCardsContainer = document.getElementById('leg-cards-grid-container');
+
+
+        const MAX_CHART_POINTS = 30;
+        let uiUpdateIntervalChart;
+        let espDataAgeCharts = {};
+        let motorAngleCharts = {};
+        let dmpVisualizers = {};
+        let currentMotorTargetAngles = new Array(numMotors > 0 ? numMotors : 8).fill(0.0);
+        let clientSideControlEnabled = false;
+
+        let pathTracers = {};
+
+        if (motorSelectEl && motorConfigListFromPython && motorConfigListFromPython.length > 0) { motorConfigListFromPython.forEach(motor => { const option = document.createElement('option'); option.value = motor.id; option.textContent = `${motor.name} (ID ${motor.id})`; motorSelectEl.appendChild(option); }); } else { console.warn("Motor select not populated."); }
+
+        const socket = io();
+        socket.on('connect', () => { wsStatusEl.textContent = 'Connected'; wsStatusDotEl.style.backgroundColor = 'var(--success-color)'; });
+        socket.on('disconnect', () => { wsStatusEl.textContent = 'Disconnected'; wsStatusDotEl.style.backgroundColor = 'var(--error-color)'; });
+
+        socket.on('initial_config', (data) => {
+            if (!data || !data.motors || !data.legs_order) { console.error("Malformed initial_config:", data); return; }
+            motorConfigListFromPython = data.motors; legsOrderFromPython = data.legs_order;
+            clientSideControlEnabled = data.control_enabled;
+            updateToggleButtonText();
+            try { setupUiUpdateIntervalChart(); } catch (e) { console.error("Err UI Chart:", e); }
+            createEspDataAgeChart('esp0');
+            createEspDataAgeChart('esp1');
+            try { setupMotorAngleCharts(motorConfigListFromPython, legsOrderFromPython); } catch (e) { console.error("Err Motor Charts:", e); }
+            setupPathTracer('esp0');
+            setupPathTracer('esp1');
+        });
+
+        socket.on('command_status', (data) => {
+            const commandStatusMsgEl = document.getElementById('command-status-msg');
+            if (commandStatusMsgEl) {
+                 commandStatusMsgEl.textContent = `[${data.command}]: ${data.message}`;
+                 commandStatusMsgEl.style.color = data.success ? 'var(--success-color)' : 'var(--error-color)';
+                 if (data.hasOwnProperty('control_enabled')) { clientSideControlEnabled = data.control_enabled; updateToggleButtonText(); }
+                setTimeout(() => { commandStatusMsgEl.textContent = ''; }, 7000);
+            }
+        });
+
+        let lastDataReceiveTime = performance.now();
+
+        socket.on('robot_data_update', (data) => {
+            const now = performance.now(); const interval = now - lastDataReceiveTime; lastDataReceiveTime = now;
+            if (uiUpdateIntervalChart) { updateChart(uiUpdateIntervalChart, interval); }
+            if (uiUpdateIntervalValueEl) uiUpdateIntervalValueEl.textContent = `(${interval.toFixed(0)} ms)`;
+            const lastUpdateEl = document.getElementById('last-update-time'); const date = new Date(data.timestamp * 1000);
+            if (lastUpdateEl) lastUpdateEl.textContent = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            if (data.hasOwnProperty('control_enabled_server_state')) { clientSideControlEnabled = data.control_enabled_server_state; updateToggleButtonText(); }
+            try { updateDashboardUI(data, now); } catch (e) { console.error("Error in updateDashboardUI:", e, "Data:", data); }
+        });
+
+
+        const initRobotBtn = document.getElementById('init-robot-btn'); if (initRobotBtn) initRobotBtn.addEventListener('click', () => socket.emit('request_robot_init'));
+        if (toggleControlBtn) toggleControlBtn.addEventListener('click', () => socket.emit('request_toggle_control'));
+        const resetHwBtn = document.getElementById('reset-hw-btn'); if (resetHwBtn) resetHwBtn.addEventListener('click', () => socket.emit('request_reset_all_hw'));
+        const sendAngleBtn = document.getElementById('send-angle-btn'); const motorAngleInputEl = document.getElementById('motor-angle-input');
+        if (sendAngleBtn && motorSelectEl && motorAngleInputEl) { sendAngleBtn.addEventListener('click', () => { const motorId = parseInt(motorSelectEl.value); const angle = parseFloat(motorAngleInputEl.value); if (!isNaN(motorId) && !isNaN(angle)) { if (!clientSideControlEnabled) { alert("Control is disabled."); return; } let anglesToSend = [...currentMotorTargetAngles]; anglesToSend[motorId] = angle; socket.emit('request_set_angles', { angles: anglesToSend }); } });}
+
+        function updateToggleButtonText() { if (toggleControlBtn) { if (clientSideControlEnabled) { toggleControlBtn.innerHTML = '<span class="icon">🚫</span>Apagar control'; } else { toggleControlBtn.innerHTML = '<span class="icon">⚡</span>Activar control'; } } }
+
+        function chartOptions(custom = {}) {
+            return {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                scales: {
+                    y: { suggestedMin: custom.yMin, suggestedMax: custom.yMax, title: { display: !!custom.yLabel, text: custom.yLabel, color: 'var(--text-muted-color)'}, ticks: { color: 'var(--text-muted-color)', font: {size: 10} }, grid: { color: 'var(--graph-grid-color)' } },
+                    x: { display: false, grid: { color: 'var(--graph-grid-color)' } }
+                },
+                plugins: {
+                    legend: { display: false },
+                    title: { display: true, text: custom.titleText || '', color: 'var(--text-color)', font: {size: 12, weight: '500'}, padding: { top:0, bottom:5}, align: 'start' }
+                }
+            };
+        }
+
+        function getChartDatasetDefaults() {
+            return {
+                data: [],
+                borderColor: getCssVariableValue('--graph-line-color'),
+                borderWidth: 1.5, 
+                pointRadius: 0,
+                tension: 0.3,
+                fill: false
+            };
+        }
+
+
+        function setupUiUpdateIntervalChart() {
+            const canvasEl = document.getElementById('uiUpdateIntervalChart');
+            if (!canvasEl) { console.error("uiUpdateIntervalChart canvas not found!"); return; }
+            const ctx = canvasEl.getContext('2d');
+            uiUpdateIntervalChart = new Chart(ctx, {
+                type: 'line', data: { labels: [], datasets: [getChartDatasetDefaults()] },
+                options: chartOptions({ yMin: 0, yMax: 200, titleText: ' ' })
+            });
+        }
+
+        function createEspDataAgeChart(espIdString) {
+            if (espDataAgeCharts[espIdString]) return;
+            const canvasEl = document.getElementById(`${espIdString}DataAgeChart`);
+            if (!canvasEl) { console.warn(`Canvas for ${espIdString}DataAgeChart not found.`); return; }
+            const ctx = canvasEl.getContext('2d');
+            espDataAgeCharts[espIdString] = new Chart(ctx, {
+                type: 'line',
+                data: { labels: [], datasets: [getChartDatasetDefaults()] },
+                options: chartOptions({ yMin: 0, yMax: 500, titleText: ` ` })
+            });
+        }
+
+        function setupMotorAngleCharts(motors, legsOrderToUse) {
+            if (!motors || !legsOrderToUse || !legCardsContainer) { console.error("Missing data for motor chart setup or leg container not found."); return; }
+            legCardsContainer.innerHTML = '';
+            motorAngleCharts = {};
+            const legOrderMap = { "FL": 0, "FR": 1, "BL": 2, "BR": 3 };
+            const sortedLegsOrder = legsOrderToUse.slice().sort((a, b) => (legOrderMap[a.toUpperCase().replace(" LEG", "")] ?? 99) - (legOrderMap[b.toUpperCase().replace(" LEG", "")] ?? 99));
+            if (sortedLegsOrder.length === 4 && legCardsContainer.classList.contains('layout-2x2')) {} else { legCardsContainer.classList.remove('layout-2x2'); }
+            sortedLegsOrder.forEach(legName => {
+                const legCard = document.createElement('div'); legCard.classList.add('grid-card', 'leg-card'); legCard.id = `leg-card-${legName.toLowerCase().replace(/\s+/g, '-')}`;
+                legCard.innerHTML = `<h2>${legName} <span class="current-value-display">(Enc / Tgt / Angle °)</span></h2><div class="motor-leg-charts-container"></div>`;
+                legCardsContainer.appendChild(legCard);
+                const legChartContainer = legCard.querySelector('.motor-leg-charts-container');
+                if (!legChartContainer) { console.error(`No .motor-leg-charts-container in ${legName}`); return; }
+                motors.filter(m => m.leg === legName).sort((a,b) => (a.type === "Hip" ? -1 : 1)).forEach(motor => {
+                    const chartItemDiv = document.createElement('div'); chartItemDiv.classList.add('motor-chart-item');
+                    const canvas = document.createElement('canvas'); chartItemDiv.appendChild(canvas); legChartContainer.appendChild(chartItemDiv);
+                    const ctx = canvas.getContext('2d');
+                    motorAngleCharts[motor.id] = new Chart(ctx, { type: 'line',
+                        data: { labels: [], datasets: [getChartDatasetDefaults()] },
+                        options: chartOptions({ yMin: -120, yMax: 120, titleText: `${motor.name}: 0.0° (E:0 / T:0)` }) }); }); });
+        }
+
+
+        function updateChart(chart, newData, newTitleText = null) { if (!chart || !chart.data) { return; } chart.data.labels.push(''); chart.data.datasets[0].data.push(newData); if (chart.data.labels.length > MAX_CHART_POINTS) { chart.data.labels.shift(); chart.data.datasets[0].data.shift(); } if (newTitleText && chart.options.plugins.title) { chart.options.plugins.title.text = newTitleText; } chart.update('none'); }
+
+        function createAxisTextSprite(text, colorParams) {
+            const fontface = 'Arial'; const fontsize = 64;
+            const canvas = document.createElement('canvas'); const context = canvas.getContext('2d');
+            context.font = `Bold ${fontsize}px ${fontface}`;
+            const metrics = context.measureText(text); const textWidth = metrics.width;
+            canvas.width = textWidth; canvas.height = fontsize * 1.2;
+            context.font = `Bold ${fontsize}px ${fontface}`;
+            context.fillStyle = `rgba(${colorParams.r}, ${colorParams.g}, ${colorParams.b}, ${colorParams.a})`;
+            context.textAlign = 'center'; context.textBaseline = 'middle';
+            context.fillText(text, canvas.width / 2, canvas.height / 2);
+            const texture = new THREE.Texture(canvas); texture.needsUpdate = true;
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture, depthTest: false, depthWrite: false });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            const spriteHeightInWorldUnits = 0.25;
+            sprite.scale.set(spriteHeightInWorldUnits * (canvas.width / canvas.height), spriteHeightInWorldUnits, 1.0);
+            return sprite;
+        }
+
+        function createDMPVisualizer(containerElement, espId) {
+            if (!containerElement || dmpVisualizers[espId]) return;
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf0f0f0);
+            const camera = new THREE.PerspectiveCamera(50, containerElement.clientWidth / containerElement.clientHeight, 0.1, 100);
+            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(containerElement.clientWidth, containerElement.clientHeight);
+            containerElement.innerHTML = '';
+            containerElement.appendChild(renderer.domElement);
+            const geometry = new THREE.BoxGeometry(1.2, 0.4, 1.6);
+            const material = new THREE.MeshNormalMaterial({transparent:true, opacity:0.95});
+            const cube = new THREE.Mesh(geometry, material);
+            scene.add(cube);
+            const axesHelper = new THREE.AxesHelper(1.5);
+            scene.add(axesHelper);
+            const labelDist = 1.5 * 1.1; const labelOffset = 0.15;
+            const xLabel = createAxisTextSprite('X', { r:255, g:0, b:0, a:1.0 });
+            xLabel.position.set(labelDist, labelOffset, 0); scene.add(xLabel);
+            const yLabel = createAxisTextSprite('Y', { r:0, g:255, b:0, a:1.0 });
+            yLabel.position.set(labelOffset, labelDist, 0); scene.add(yLabel);
+            const zLabel = createAxisTextSprite('Z', { r:0, g:0, b:255, a:1.0 });
+            zLabel.position.set(0, labelOffset, labelDist); scene.add(zLabel);
+            camera.position.set(2.44, 1.63, 4.35); camera.lookAt(0,0,0);
+            dmpVisualizers[espId] = { cube, renderer, scene, camera, xLabel, yLabel, zLabel };
+            camera.aspect = containerElement.clientWidth / containerElement.clientHeight;
+            camera.updateProjectionMatrix();
+            function animate() {
+                if (!dmpVisualizers[espId]) return;
+                requestAnimationFrame(animate);
+                dmpVisualizers[espId].renderer.render(dmpVisualizers[espId].scene, dmpVisualizers[espId].camera);
+            }
+            animate();
+        }
+
+        function updateDMPCube(espId, dmpDataFromPython) {
+            const visualizer = dmpVisualizers[espId];
+            if (!visualizer || !visualizer.cube || !dmpDataFromPython || !dmpDataFromPython.ypr_deg) {
+                return;
+            }
+            // Use the smoothed yaw for the cube as well, for consistency with path arrow
+            let yawToUse = dmpDataFromPython.ypr_deg.yaw;
+            const tracer = pathTracers[espId];
+            if(tracer && tracer.emaYaw !== null && tracer.lastUpdateTime !==0) { // Check if emaYaw is initialized
+                yawToUse = tracer.emaYaw;
+            }
+
+            let mpuYawDeg = parseFloat(yawToUse);
+            let mpuPitchDeg = parseFloat(dmpDataFromPython.ypr_deg.pitch); // Keep pitch/roll raw for now
+            let mpuRollDeg = parseFloat(dmpDataFromPython.ypr_deg.roll);
+
+            if (isNaN(mpuYawDeg)) mpuYawDeg = 0;
+            if (isNaN(mpuPitchDeg)) mpuPitchDeg = 0;
+            if (isNaN(mpuRollDeg)) mpuRollDeg = 0;
+
+            const mpuYawRad = THREE.MathUtils.degToRad(mpuYawDeg);
+            const mpuPitchRad = THREE.MathUtils.degToRad(mpuPitchDeg);
+            const mpuRollRad = THREE.MathUtils.degToRad(mpuRollDeg);
+            visualizer.cube.rotation.order = 'YXZ';
+            visualizer.cube.rotation.y = mpuYawRad;
+            visualizer.cube.rotation.x = -mpuPitchRad;
+            visualizer.cube.rotation.z = mpuRollRad;
+        }
+
+        function setupPathTracer(espIdString) {
+            const pathCard = document.getElementById(`${espIdString}-path-trace-card`);
+            const canvasContainer = document.getElementById(`pathTraceCanvasContainer-${espIdString}`);
+            const canvas = document.getElementById(`pathTraceCanvas-${espIdString}`);
+            const resetButton = document.getElementById(`resetPathBtn-${espIdString}`);
+            const scaleInput = document.getElementById(`pathScale-${espIdString}`);
+
+            if (!canvas || !canvasContainer || !pathCard) {
+                console.warn(`Path tracer elements for ${espIdString} not found.`);
+                return;
+            }
+            pathCard.style.display = 'flex';
+
+            const ctx = canvas.getContext('2d');
+            const rect = canvasContainer.getBoundingClientRect();
+            const baseWidth = rect.width > 100 ? rect.width : 600; 
+            const baseHeight = rect.height > 100 ? rect.height : 450;
+
+            canvas.width = baseWidth * 2;
+            canvas.height = baseHeight * 2;
+
+            const initialScale = parseInt(scaleInput.value) || 2000; 
+
+            const pathTracer = {
+                ctx: ctx,
+                canvas: canvas,
+                pathPoints: [{x: canvas.width / 2, y: canvas.height / 2}],
+                currentX: canvas.width / 2,
+                currentY: canvas.height / 2,
+                currentYawRad: -Math.PI / 2, 
+                velocityX: 0,
+                velocityY: 0,
+                totalDistance: 0,
+                maxPathPoints: 300,
+                scale: initialScale, 
+                gridSize: 100,  
+                arrowSize: 20, 
+                lastUpdateTime: 0,
+                // --- EMA Properties ---
+                emaAx: null, // Will be initialized with the first reading
+                emaAy: null,
+                emaYaw: null,
+                emaAlpha: 0.18, // Tunable: 0.1 (heavy smoothing) to 0.9 (light smoothing)
+                maxExpectedDt: 200 // milliseconds (e.g., 4x expected interval if 50ms interval)
+            };
+            pathTracers[espIdString] = pathTracer;
+
+            if (resetButton) {
+                resetButton.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    resetPath(espIdString);
+                });
+            }
+            if (scaleInput) {
+                scaleInput.addEventListener('change', (e) => {
+                    const newScale = parseInt(e.target.value);
+                    if (!isNaN(newScale) && newScale >= 10) {
+                        if (pathTracers[espIdString]) { 
+                           pathTracers[espIdString].scale = newScale; 
+                           resetPath(espIdString);
+                        }
+                    }
+                });
+            }
+            drawPathTrace(espIdString);
+        }
+
+        function resetPath(espIdString) {
+            const tracer = pathTracers[espIdString];
+            if (!tracer) return;
+            const canvasContainer = document.getElementById(`pathTraceCanvasContainer-${espIdString}`);
+            const scaleInput = document.getElementById(`pathScale-${espIdString}`);
+
+            if (canvasContainer) {
+                 const rect = canvasContainer.getBoundingClientRect();
+                 const baseWidth = rect.width > 100 ? rect.width : 600;
+                 const baseHeight = rect.height > 100 ? rect.height : 450;
+                 tracer.canvas.width = baseWidth * 2;
+                 tracer.canvas.height = baseHeight * 2;
+            }
+            if (scaleInput) {
+                tracer.scale = parseInt(scaleInput.value) || 2000; 
+            }
+
+            tracer.currentX = tracer.canvas.width / 2;
+            tracer.currentY = tracer.canvas.height / 2;
+            tracer.pathPoints = [{x: tracer.currentX, y: tracer.currentY}];
+            tracer.velocityX = 0;
+            tracer.velocityY = 0;
+            tracer.totalDistance = 0;
+            tracer.currentYawRad = -Math.PI / 2; 
+            tracer.lastUpdateTime = 0;
+            // --- Reset EMA Values ---
+            tracer.emaAx = null;
+            tracer.emaAy = null;
+            tracer.emaYaw = null;
+
+            drawPathTrace(espIdString);
+            const pathInfoEl = document.getElementById(`${espIdString}-path-info`);
+            if(pathInfoEl) pathInfoEl.innerHTML = `<p>Dist: 0.00 m | Speed: 0.00 m/s</p>`;
+        }
+
+        function drawPathTrace(espIdString) {
+            const tracer = pathTracers[espIdString];
+            if (!tracer || !tracer.ctx || tracer.canvas.width === 0 || tracer.canvas.height === 0) return;
+
+            const { ctx, canvas, pathPoints, currentX, currentY, currentYawRad, gridSize, arrowSize } = tracer;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.strokeStyle = getCssVariableValue('--graph-grid-color');
+            ctx.lineWidth = 2; 
+            const offsetX = currentX % gridSize;
+            const offsetY = currentY % gridSize;
+
+            for (let x = -offsetX; x < canvas.width; x += gridSize) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+            }
+            for (let y = -offsetY; y < canvas.height; y += gridSize) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+            }
+
+            ctx.save();
+            ctx.translate(canvas.width / 2 - currentX, canvas.height / 2 - currentY);
+
+            if (pathPoints.length > 1) {
+                ctx.beginPath();
+                ctx.moveTo(pathPoints[0].x, pathPoints[0].y);
+                for (let i = 1; i < pathPoints.length; i++) {
+                    ctx.lineTo(pathPoints[i].x, pathPoints[i].y);
+                }
+                ctx.strokeStyle = getCssVariableValue('--path-color');
+                ctx.lineWidth = 8; 
+                ctx.stroke();
+            }
+            ctx.restore();
+
+            ctx.save();
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.rotate(currentYawRad); 
+            ctx.beginPath();
+            ctx.moveTo(arrowSize * 0.7, 0); 
+            ctx.lineTo(-arrowSize * 0.3, -arrowSize * 0.5);
+            ctx.lineTo(-arrowSize * 0.1, 0); 
+            ctx.lineTo(-arrowSize * 0.3, arrowSize * 0.5);
+            ctx.closePath();
+            ctx.fillStyle = getCssVariableValue('--arrow-color');
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function updatePathTracer(espIdString, dmpData, currentTime) {
+            const tracer = pathTracers[espIdString];
+            const pathCardEl = document.getElementById(`${espIdString}-path-trace-card`);
+            const pathLastUpdateEl = document.getElementById(`pathLastUpdate-${espIdString}`);
+            const pathInfoEl = document.getElementById(`${espIdString}-path-info`);
+
+            if (!tracer || !dmpData || !dmpData.world_accel_mps2 || !dmpData.ypr_deg) {
+                if(pathCardEl) pathCardEl.style.display = 'none';
+                return;
+            }
+            if(pathCardEl) pathCardEl.style.display = 'flex';
+
+            const raw_ax = parseFloat(dmpData.world_accel_mps2.ax) || 0;
+            const raw_ay = parseFloat(dmpData.world_accel_mps2.ay) || 0;
+            const raw_yaw = parseFloat(dmpData.ypr_deg.yaw) || 0;
+
+            if (tracer.lastUpdateTime === 0) { // First data point
+                tracer.lastUpdateTime = currentTime;
+                tracer.emaAx = raw_ax;
+                tracer.emaAy = raw_ay;
+                tracer.emaYaw = raw_yaw;
+                tracer.currentYawRad = THREE.MathUtils.degToRad(tracer.emaYaw) - Math.PI / 2; 
+                return;
+            }
+
+            const dt_ms = currentTime - tracer.lastUpdateTime;
+            if (dt_ms <= 1) { // Avoid division by zero or tiny dt
+                // console.warn(`Skipping update due to very small dt: ${dt_ms} ms`);
+                return;
+            }
+            const dt_s = dt_ms / 1000.0;
+            tracer.lastUpdateTime = currentTime;
+
+            if (pathLastUpdateEl) pathLastUpdateEl.textContent = new Date(currentTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+            // --- EMA Calculation ---
+            tracer.emaAx = (tracer.emaAlpha * raw_ax) + (1 - tracer.emaAlpha) * tracer.emaAx;
+            tracer.emaAy = (tracer.emaAlpha * raw_ay) + (1 - tracer.emaAlpha) * tracer.emaAy;
+            tracer.emaYaw = (tracer.emaAlpha * raw_yaw) + (1 - tracer.emaAlpha) * tracer.emaYaw;
+            // --- End EMA Calculation ---
+            
+            let dmp_world_ax = tracer.emaAx;
+            let dmp_world_ay = tracer.emaAy;
+            let yawDeg = tracer.emaYaw;
+            
+            tracer.currentYawRad = THREE.MathUtils.degToRad(yawDeg) - (Math.PI / 2);
+
+            // Heuristic for missing packets / large dt
+            if (dt_ms > tracer.maxExpectedDt) {
+                // console.warn(`Large dt detected: ${dt_ms}ms. Zeroing accelerations for this step.`);
+                dmp_world_ax = 0;
+                dmp_world_ay = 0;
+                // Optionally, also decay velocity more rapidly or reset it
+                // tracer.velocityX *= 0.5; 
+                // tracer.velocityY *= 0.5;
+            }
+
+            const accelThreshold = 0.1; // Can be tuned. With EMA, this can often be lower.
+            if (Math.abs(dmp_world_ax) < accelThreshold) dmp_world_ax = 0;
+            if (Math.abs(dmp_world_ay) < accelThreshold) dmp_world_ay = 0;
+
+            let canvas_frame_accel_x = -dmp_world_ay; 
+            let canvas_frame_accel_y = -dmp_world_ax; 
+
+            tracer.velocityX += canvas_frame_accel_x * dt_s;
+            tracer.velocityY += canvas_frame_accel_y * dt_s;
+
+            // Damping factor to prevent runaway velocity due to small persistent noise/bias
+            // and to help settle when accelerations are zeroed after large dt or by threshold.
+            const dampingFactor = 0.9; // Higher means more damping (velocity decays faster)
+            tracer.velocityX *= Math.pow((1 - dampingFactor), dt_s);
+            tracer.velocityY *= Math.pow((1 - dampingFactor), dt_s);
+
+
+            const dx_meters = tracer.velocityX * dt_s;
+            const dy_meters = tracer.velocityY * dt_s;
+
+            tracer.currentX += dx_meters * tracer.scale;
+            tracer.currentY += dy_meters * tracer.scale;
+
+            const distMovedPixels = Math.sqrt(Math.pow(dx_meters * tracer.scale, 2) + Math.pow(dy_meters * tracer.scale, 2));
+            if (distMovedPixels > 1.0) { // Adjusted threshold for adding points, considering hi-res canvas 
+                 tracer.pathPoints.push({x: tracer.currentX, y: tracer.currentY});
+                 if (tracer.pathPoints.length > tracer.maxPathPoints) {
+                    tracer.pathPoints.shift();
+                }
+            }
+
+            tracer.totalDistance += Math.sqrt(dx_meters * dx_meters + dy_meters * dy_meters);
+            const currentSpeed = Math.sqrt(tracer.velocityX*tracer.velocityX + tracer.velocityY*tracer.velocityY);
+
+            if (pathInfoEl) {
+                pathInfoEl.innerHTML = `<p>Dist: ${tracer.totalDistance.toFixed(2)}m | Speed: ${currentSpeed.toFixed(2)} m/s | Yaw: ${yawDeg.toFixed(1)}°</p>`;
+            }
+            drawPathTrace(espIdString);
+        }
+
+        function updateDashboardUI(data, currentTime) {
+            data.esps.forEach((esp, espIndex) => {
+                const espIdString = `esp${espIndex}`;
+                const espCardEl = document.getElementById(`${espIdString}-column`);
+                const pathCardEl = document.getElementById(`${espIdString}-path-trace-card`);
+
+                const espIpEl = document.getElementById(`${espIdString}-ip`);
+                const espDataStatusEl = document.getElementById(`${espIdString}-data-status`);
+                const dmpSectionEl = document.getElementById(`${espIdString}-dmp-section`);
+                const dmpTextEl = document.getElementById(`${espIdString}-dmp-text`);
+                const espDataAgeValueEl = document.getElementById(`${espIdString}-data-age-value`);
+
+
+                if (espCardEl) espCardEl.style.display = 'flex';
+
+                if (espIpEl) espIpEl.textContent = esp.ip;
+                if (espDataStatusEl) espDataStatusEl.style.backgroundColor = esp.data_available ? 'var(--success-color)' : 'var(--error-color)';
+
+                if (esp.data_available) {
+                    if (espDataAgeCharts[espIdString]) {
+                        const ageTitle = `Data Age: ${esp.data_age_ms > 0 ? esp.data_age_ms.toFixed(0) : '-'} ms`;
+                        updateChart(espDataAgeCharts[espIdString], esp.data_age_ms > 0 ? esp.data_age_ms : null, ageTitle);
+                    }
+                    if (espDataAgeValueEl) espDataAgeValueEl.textContent = `(${esp.data_age_ms > 0 ? esp.data_age_ms.toFixed(0) : '-'} ms)`;
+                } else {
+                     if (espDataAgeValueEl) espDataAgeValueEl.textContent = `(N/A)`;
+                     if (pathCardEl) pathCardEl.style.display = 'none';
+                }
+
+                if (esp.data_available && esp.dmp_ready) {
+                    if(dmpSectionEl) dmpSectionEl.style.display = 'flex';
+                    const dmpCubeContainer = document.getElementById(`dmpCubeContainer-${espIdString}`);
+                    if (dmpCubeContainer && !dmpVisualizers[espIdString]) {
+                        createDMPVisualizer(dmpCubeContainer, espIdString);
+                    }
+                    if (dmpVisualizers[espIdString] && esp.dmp_data) {
+                        // Pass tracer to updateDMPCube so it can potentially use smoothed yaw
+                        updateDMPCube(espIdString, esp.dmp_data); 
+                    }
+
+                    if(dmpTextEl && esp.dmp_data) {
+                        let textContent = `<p><strong>DMP Status:</strong> READY</p>`;
+                        const quat = esp.dmp_data.quaternion || {};
+                        const accel = esp.dmp_data.world_accel_mps2 || {};
+                        const ypr = esp.dmp_data.ypr_deg || {};
+                        textContent += `<p><strong>Quat:</strong> W:${(quat.w||0).toFixed(2)}, X:${(quat.x||0).toFixed(2)}, Y:${(quat.y||0).toFixed(2)}, Z:${(quat.z||0).toFixed(2)}</p>`;
+                        textContent += `<p><strong>World Accel (m/s²):</strong> AX:${(accel.ax||0).toFixed(2)}, AY:${(accel.ay||0).toFixed(2)}, AZ:${(accel.az||0).toFixed(2)}</p>`;
+                        
+                        let displayYaw = (ypr.yaw||0).toFixed(1);
+                        const tracer = pathTracers[espIdString];
+                        if(tracer && tracer.emaYaw !== null && tracer.lastUpdateTime !==0){
+                            displayYaw = `${(ypr.yaw||0).toFixed(1)} (EMA: ${tracer.emaYaw.toFixed(1)})`;
+                        }
+                        textContent += `<p><strong>YPR (deg):</strong> Yaw:${displayYaw}, Pitch:${(ypr.pitch||0).toFixed(1)}, Roll:${(ypr.roll||0).toFixed(1)}</p>`;
+                        dmpTextEl.innerHTML = textContent;
+                    }
+                    if (pathTracers[espIdString] && esp.dmp_data) {
+                        updatePathTracer(espIdString, esp.dmp_data, currentTime);
+                    }
+
+                } else {
+                    if(dmpSectionEl) dmpSectionEl.style.display = 'none';
+                    if(dmpTextEl) dmpTextEl.innerHTML = `<p><strong>DMP Status:</strong> ${esp.data_available ? 'NOT READY' : 'NO DATA'}</p>`;
+                    if (pathCardEl) pathCardEl.style.display = 'none';
+                }
+
+
+                esp.motors.forEach(motor => {
+                    if (motorAngleCharts[motor.id]) {
+                        const encPos = motor.encoderPos !== undefined ? motor.encoderPos : 'N/A';
+                        const tgtPos = motor.targetPos !== undefined ? motor.targetPos : 'N/A';
+                        const angle = motor.angle !== undefined ? motor.angle.toFixed(1) : 'N/A';
+                        const newTitle = `${motor.name}: ${angle}° (E:${encPos} / T:${tgtPos})`;
+                        updateChart(motorAngleCharts[motor.id], motor.angle, newTitle);
+                        currentMotorTargetAngles[motor.id] = motor.angle;
+                    }
+                });
+            });
+        }
+        updateToggleButtonText();
+    </script>
+</body>
+</html>
