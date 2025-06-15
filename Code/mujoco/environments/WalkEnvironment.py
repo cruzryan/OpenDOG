@@ -65,6 +65,7 @@ class WalkEnvironmentV0(MujocoEnv):
 		info = {
 			"x_position": self.data.qpos[0],
 			"y_position": self.data.qpos[1],
+			"x_velocity": self.data.qvel[0],
 			"distance_from_origin": np.linalg.norm(self.data.qpos[0:2], ord=2),
 			"paw_contact_forces": self.utils.get_paw_contact_forces(self.data, self.model),
 			"patterns_matches": self.utils.diagonal_gait_reward(self.data, self.model),

@@ -28,18 +28,20 @@ def test_model(env, motion):
 		real_angles = scaler.to_real_robot_degrees(action)
 		print(f"Grados en robot real [...]:\n{np.round(real_angles, 2)}\n")
 
-		plotter.update_plot([
-			info['paw_contact_forces'][4][2],
-			info['paw_contact_forces'][7][2],
-			info['paw_contact_forces'][10][2],
-			info['paw_contact_forces'][13][2],
-		])
+		plotter.update_plots(
+			force_samples = [
+				info['paw_contact_forces'][4][2],
+				info['paw_contact_forces'][7][2],
+				info['paw_contact_forces'][10][2],
+				info['paw_contact_forces'][13][2],
+			],
+			velocity_samples = [info['x_velocity']]
+		)
 
 			
 	print("Simulación terminada.")
 	
-	env.close()
-	
+	env.close()	
 	plotter.close()
 
 if __name__ == "__main__":
