@@ -1,32 +1,11 @@
 import numpy as np
 import mujoco
-#self.model.opt.gravity, self.model.key_ctrl[0], self.model.actuator_ctrlrange
 
-class WalkEnvironmentRewardCalc:
-	"""
-	Kinematic body tree according with aparition 
-	kt = [0, 1 ,2 , 3, 4, 5, 6, 7, 8, 9]
-	0: chasis
-	1: FL_tigh
-	2: FL_calf
-	3: FL_paw
-	
-	4: FR_tigh
-	5: FR_calf
-	6: FR_paw
+class TurnRewwardCalc:
 
-	7: BL_tigh
-	8: BL_calf
-	9: BL_paw
-
-	10: BR_tigh
-	11: BR_calf
-	12: BR_paw
-	"""
 	def __init__(self, gravity, default_joint_position, actuator_range):
 
 		self.reward_weights = {
-			"linear_vel_tracking": 1.5,
 			"angular_vel_tracking": .001,
 			"distance": .009, 
 			"healthy": .015,
@@ -37,33 +16,16 @@ class WalkEnvironmentRewardCalc:
 
 		self.cost_weights = {
 			"cost_distance": 5,
-			"torque": 0.0001,
-			"vertical_vel": 2.0,
-			"xy_angular_vel": 0.05,
-			"action_rate": 0.01,
-			"joint_limit": 10.0,
-			"joint_velocity": 0.01,
-			"joint_acceleration": 2.5e-7,
-			"orientation": 1.0,
-			"collision": 1.0,
 			"default_joint_position": 0.1,
 			"diagonal_gait_cost": 0.5
 		}
 
 		# 4:FL, 7:FR, 10:BL, 13:BR
 		self.diagonal_walk_patterns = [
-			[True, True, True, True],
-			[True, True, False, True],
-			[True, False, False, True],
-			[True, False, True, True],
-			[True, True, True, True],
-			[True, True, True, False],
 			[False, True, True, False],
-			[True, True, True, True],
+			[True, False, False, True],
 		]
 	
-		self.default_z_force_max = 3.10
-		self.default_x_force_max = 3.10
 		self.current_pattern_index = 0
 		self.consecutive_matches = 0
 		self.max_distance_achieve = 0
@@ -81,10 +43,7 @@ class WalkEnvironmentRewardCalc:
 			"dofs_velocity": 0.05,
 		}
 		self.tracking_velocity_sigma = 0.25
-		
-		#Control deviation of a rect line
-		self.z_range = (.04, 0.110)
-		self.yaw_range = np.deg2rad(15)
+
 		self.pitch_range = np.deg2rad(15)
 		self.roll_range = np.deg2rad(15)
 
@@ -102,17 +61,6 @@ class WalkEnvironmentRewardCalc:
 		self.last_action = np.zeros(8)
 		self.clip_obs_threshold = 100.0
 
-		self.time_feet_in_ground = 1000
-		self.ground_force = [3, 0, 5]
-		self.time_in_pattern = 0
-		self.z_curve = self.ground_force[2]* np.sin(np.linspace(0, np.pi, 50))
-		self.x_curve = self.ground_force[0]* np.sin(np.linspace(0, 2*np.pi, 50))
-		self.samples_z = np.zeros((4, self.time_feet_in_ground), dtype=float)
-		self.samples_x = np.zeros((4, self.time_feet_in_ground), dtype=float)
-
-	# Last 12 values are the motor torques
-	def torque_cost(torques):
-		return np.sum(np.square(torques))
 
 	def is_healthy(self, position, velocity):
 		state = self.get_state_vector(position, velocity)
@@ -120,16 +68,12 @@ class WalkEnvironmentRewardCalc:
 		if not np.isfinite(state).all():
 			return False
 
-		
-		current_roll, current_pitch, current_yaw = self.euler_from_quaternion(state[3:7])
+		current_roll, current_pitch, _ = self.euler_from_quaternion(state[3:7])
 
 		if not ( -self.roll_range < current_roll < self.roll_range):
 			return False
 
 		if not ( -self.pitch_range < current_pitch < self.pitch_range):
-			return False
-
-		if not ( -self.yaw_range < current_yaw < self.yaw_range):
 			return False
 		
 		return True
@@ -143,29 +87,15 @@ class WalkEnvironmentRewardCalc:
 		if not np.isfinite(state).all():
 			return False
 		
-		current_roll, current_pitch, current_yaw = self.euler_from_quaternion(state[3:7])
+		current_roll, current_pitch, _ = self.euler_from_quaternion(state[3:7])
 
 		distance_roll = (self.roll_range - abs(current_roll)) if not ( abs(current_roll) > self.roll_range)  else 0
 		distance_pitch = (self.pitch_range - abs(current_pitch)) if not ( abs(current_pitch) > self.pitch_range)  else 0
-		distance_yaw = (self.yaw_range - abs(current_yaw)) if not ( abs(current_yaw) > self.yaw_range)  else 0
 
-		max_distance = self.z_range[1] + self.roll_range + self.pitch_range + self.yaw_range
+		max_distance = self.roll_range + self.pitch_range 
 
-		return (distance_roll + distance_pitch + distance_yaw)/max_distance
+		return (distance_roll + distance_pitch)/max_distance
 
-	def get_projected_gravity(self, orientation_vector):
-		euler_orientation = np.array(self.euler_from_quaternion(orientation_vector))
-		projected_gravity_not_normalized = (
-			np.dot(self.gravity_vector, euler_orientation) * euler_orientation
-		)
-		if np.linalg.norm(projected_gravity_not_normalized) == 0:
-			return projected_gravity_not_normalized
-		else:
-			return projected_gravity_not_normalized / np.linalg.norm(
-				projected_gravity_not_normalized
-			)
-
-	######### Positive Reward functions #########
 	def get_linear_velocity_tracking_reward(self, velocity, position_x):
 		if position_x > 0:
 			vel_sqr_error = np.sum(
@@ -179,26 +109,6 @@ class WalkEnvironmentRewardCalc:
 		vel_sqr_error = np.square(self.desired_velocity[2] - angular_velocity_y)
 		return np.exp(-vel_sqr_error / self.tracking_velocity_sigma)
 		
-	def get_reward_ground_reaction_force(self, data, model):
-		forces = self.get_paw_contact_forces(data, model)
-		reward = 0
-		for i in self.body_feet_indices:
-			force_x = forces[i][0]
-			force_z = forces[i][2]
-			if force_x < 0 and force_z < 0 and data.qpos[0] > 0:
-				reward += np.linalg.norm([force_x, force_z])
-		return abs(reward)
-
-	def get_reward_distance(self, position):
-		if position[0] > 0:
-			return position[0]
-		else: 
-			return 0
-
-	def get_cost_distance(self, position, time):
-		if position[0] <= self.max_distance_achieve:
-			return time
-		return 0
 
 	def diagonal_gait_reward(self, data, model):
 		_, paw_index_to_contact_index = self.paws_in_ground(data, model)
@@ -254,16 +164,6 @@ class WalkEnvironmentRewardCalc:
 
 		return air_time_reward
 
-	######### Negative Reward functions #########
-	
-	def non_flat_base_cost(self, orientation_vector):
-		return np.sum(np.square(self.get_projected_gravity(orientation_vector)[:2]))
-
-	"""
-	!important doesn't work, use contact approach
-	"""
-	def collision_cost(self, external_forces):
-		return np.sum(1.0*(np.linalg.norm(external_forces[self.cfrc_ext_contact_indices]) > 0.1))
 
 	def joint_limit_cost(self, joints_angle_vector):
 		out_of_range = (self.soft_joint_range[:, 0] - joints_angle_vector).clip(
@@ -271,32 +171,12 @@ class WalkEnvironmentRewardCalc:
 		) + (joints_angle_vector - self.soft_joint_range[:, 1]).clip(min=0.0)
 		return np.sum(out_of_range)
 
-	def torque_cost(self, torque_vector):
-		return np.sum(np.square(torque_vector))
-
-	def vertical_velocity_cost(self, vertical_velocity):
-		return np.square(vertical_velocity)
-
-	def xy_angular_velocity_cost(self, xy_angular_vector):
-		return np.sum(np.square(xy_angular_vector))
 
 	def action_rate_cost(self, action):
 		return np.sum(np.square(self.last_action - action))
 
-	def joint_velocity_cost(self, join_velocity_vector):
-		return np.sum(np.square(join_velocity_vector))
-
-	def acceleration_cost(self, joint_aceleration_vector):
-		return np.sum(np.square(joint_aceleration_vector))
-
 	def default_joint_position_cost(self, joint_angle_position_vector):
 		return np.sum(np.square(joint_angle_position_vector - self.default_joint_position))
-
-	def smoothness_cost(self, joint_angle_position_vector):
-		return np.sum(np.square(joint_angle_position_vector - self.last_action))
-
-	def curriculum_factor(self):
-		return self.curriculum_base**0.997
 
 	def sample_desired_vel(self):
 		desired_vel = np.random.default_rng().uniform(
@@ -304,7 +184,6 @@ class WalkEnvironmentRewardCalc:
 		)
 		return desired_vel
 
-	###	UTILS
 
 	def get_state_vector(self, positions_vector, velocities_vector): 
 		return np.concatenate([positions_vector.flat, velocities_vector.flat])

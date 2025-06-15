@@ -24,14 +24,16 @@ packages=(
     "mujoco==3.2.3"
     "mujoco-python-viewer==0.1.4"
     "gymnasium==0.29.1"
+    "stable-baselines3[extra]"
     "stable_baselines3==2.4.0a8"
     "mujoco-mjx==3.3.0"
+    "tensorboard==2.17.0"
 )
 
 # Install each package
 for package in "${packages[@]}"; do
     echo "Installing $package..."
-    python3.12 pip install "$package"
+    python3.12 -m pip install "$package"
     if [ $? -ne 0 ]; then
         echo "Failed to install $package"
         exit 1
