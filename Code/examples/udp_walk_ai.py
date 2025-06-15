@@ -1,4 +1,4 @@
-# quad_autocorrect.py (v3 - Hallucination removed, robust init retained)
+# quad_autocorrect_policy.py (v4 - PyTorch Policy Integration)
 
 import os
 import sys
@@ -6,6 +6,17 @@ import time
 import threading
 from pynput import keyboard
 import math
+
+# --- PyTorch Imports ---
+# Ensure you have PyTorch installed: pip install torch
+try:
+    import torch
+    import torch.nn as nn
+except ImportError:
+    print("FATAL ERROR: PyTorch is not installed.")
+    print("Please install it by running: pip install torch")
+    sys.exit(1)
+
 
 # --- Path Setup ---
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -28,12 +39,13 @@ TARGET_MOTORS = list(range(NUM_MOTORS))
 # The index of the ESP32 that sends the primary IMU/DMP data (0 for ESP1, 1 for ESP2)
 # Set this to the ESP that has the MPU6050 connected.
 ESP_WITH_IMU = 1
+MODEL_PATH = 'walk_policy.pth' # Path to your trained model file
 
 # --- Yaw Auto-Correction Configuration ---
 REAL_TARGET = 0.0
 TARGET_YAW = REAL_TARGET
-CORRECTION_GAIN_KP = 1.5
-NEUTRAL_LIFT_ANGLE = 30.0
+# CORRECTION_GAIN_KP is now replaced by the neural network
+NEUTRAL_LIFT_ANGLE = 30.0 # Still useful for reference and potential clamping
 MIN_LIFT_ANGLE = 20.0
 MAX_LIFT_ANGLE = 45.0
 WALK_STEP_DURATION = 0.1
@@ -57,6 +69,39 @@ MOTOR_PINS = [
     (15, 16, 6, 7),    # Motor 6 (BL_knee) -> ESP2
     (18, 17, 4, 5),    # Motor 7 (BL_tigh) -> ESP2
 ]
+
+
+# --- Neural Network Definition (must match the training script) ---
+class WalkPolicy(nn.Module):
+    def __init__(self):
+        super(WalkPolicy, self).__init__()
+        self.network = nn.Sequential(
+            nn.Linear(1, 64),      # Input layer (1 neuron) -> Hidden layer (64 neurons)
+            nn.ReLU(),             # Activation function
+            nn.Linear(64, 64),     # Hidden layer -> Hidden layer
+            nn.ReLU(),             # Activation function
+            nn.Linear(64, 2)       # Hidden layer -> Output layer (2 neurons for N and Y)
+        )
+
+    def forward(self, x):
+        return self.network(x)
+
+
+# --- Load Trained Policy Model ---
+walk_policy_model = None
+try:
+    if not os.path.exists(MODEL_PATH):
+        raise FileNotFoundError(f"Model file not found at '{MODEL_PATH}'. "
+                                f"Please ensure it's in the same directory as the script.")
+    print(f"Loading walk policy from '{MODEL_PATH}'...")
+    walk_policy_model = WalkPolicy()
+    walk_policy_model.load_state_dict(torch.load(MODEL_PATH))
+    walk_policy_model.eval()  # Set the model to evaluation mode (very important!)
+    print("Walk policy model loaded successfully.")
+except Exception as e:
+    print(f"FATAL: Could not load the PyTorch model: {e}")
+    sys.exit(1)
+
 
 # --- Initialize QuadPilotBody and Setup ---
 body_controller = None
@@ -86,7 +131,7 @@ try:
     print("Motors reset.")
     time.sleep(0.2)
 
-    # --- ROBUST MOTOR ENABLE SEQUENCE (from your working quad.py) ---
+    # --- ROBUST MOTOR ENABLE SEQUENCE ---
     print("Enabling control for target motors...")
     all_control_enabled = True
     if not body_controller.set_all_control_status(True):
@@ -95,21 +140,18 @@ try:
 
     if not all_control_enabled:
         print("Attempting individual motor control enable...")
-        # Re-set flag to true, and let the loop determine the final state
         all_control_enabled = True
         for motor_idx in TARGET_MOTORS:
             print(f"  Enabling motor {motor_idx}...")
             if not body_controller.set_control_status(motor=motor_idx, status=True):
                 print(f"  --> Warning: Failed to enable control for motor {motor_idx}.")
-                all_control_enabled = False # If any one fails, the overall status is False
-            time.sleep(0.05) # CRITICAL: Delay to allow ESP to process
+                all_control_enabled = False
+            time.sleep(0.05)
 
     if not all_control_enabled:
-        # If after all attempts, not all motors are on, it's a fatal error.
         raise Exception("Failed to enable control for all motors after individual attempts.")
     else:
         print("All target motors control enabled successfully.")
-    # --- END OF ROBUST SEQUENCE ---
 
     initial_setup_successful = True
     print("\nInitial setup complete.")
@@ -127,7 +169,8 @@ is_walking = False
 last_key_press_time = 0
 debounce_interval = 0.2
 
-# --- Helper Functions (get_stance_angles, clamp, interruptible_sleep) ---
+
+# --- Helper Functions ---
 def get_stance_angles():
     stance = [0.0] * NUM_MOTORS
     stance[ACTUATOR_NAME_TO_INDEX_MAP["FL_tigh_actuator"]] = 45.0
@@ -149,7 +192,19 @@ def interruptible_sleep(duration):
         if not is_walking: break
         time.sleep(0.02)
 
-# --- Core Action Functions (set_manual_angles_action, execute_autocorrect_walk) ---
+def get_policy_action(yaw_error: float) -> tuple[float, float]:
+    """
+    Uses the loaded neural network to determine the N and Y lift angles.
+    """
+    # Convert the yaw_error float into a 2D tensor for the network
+    input_tensor = torch.FloatTensor([[yaw_error]])
+    
+    with torch.no_grad(): # Disable gradient calculation for inference
+        predicted_N, predicted_Y = walk_policy_model(input_tensor).squeeze().tolist()
+        
+    return predicted_N, predicted_Y
+
+# --- Core Action Functions ---
 def set_manual_angles_action(target_angles: list[float]):
     global last_key_press_time, is_walking, motor_control_enabled
     if is_walking or not motor_control_enabled: return
@@ -162,7 +217,7 @@ def set_manual_angles_action(target_angles: list[float]):
 
 def execute_autocorrect_walk():
     global is_walking, motor_control_enabled
-    print("\n--- Starting Auto-Correcting Walk Sequence ---")
+    print("\n--- Starting Auto-Correcting Walk Sequence (using NN Policy) ---")
     step_index = 0
     idx_fr_knee = ACTUATOR_NAME_TO_INDEX_MAP["FR_knee_actuator"]
     idx_bl_knee = ACTUATOR_NAME_TO_INDEX_MAP["BL_knee_actuator"]
@@ -178,18 +233,20 @@ def execute_autocorrect_walk():
                 current_yaw = dmp_data['ypr_deg'].get('yaw', 0.0)
             else:
                 print(f"Warning: Could not get yaw data from ESP {ESP_WITH_IMU}. Correction may be inaccurate.")
+            
+            # --- THIS IS THE MODIFIED SECTION ---
+            yaw_error = current_yaw - REAL_TARGET
+            
+            # Get the N and Y angles from our trained policy model
+            N, Y = get_policy_action(yaw_error)
 
-            print(f"\nCurrent Yaw: {current_yaw:.1f} deg, Target Yaw: {TARGET_YAW:.1f} deg")
-            yaw_error = current_yaw - TARGET_YAW
-            correction = CORRECTION_GAIN_KP * yaw_error
+            # Safety clamp: Even though the model should learn the limits, it's wise
+            # to enforce them here to prevent accidental damage.
+            N = clamp(N, MIN_LIFT_ANGLE, MAX_LIFT_ANGLE)
+            Y = clamp(Y, MIN_LIFT_ANGLE, MAX_LIFT_ANGLE)
+            # --- END OF MODIFICATION ---
             
-            # These signs assume a positive correction (from a right turn) should steer LEFT.
-            # To steer LEFT: increase lift/push of right-side legs (Y), decrease left-side (N).
-            # You may need to flip the signs (+/- correction) if it steers the wrong way.
-            N = clamp(NEUTRAL_LIFT_ANGLE - correction, MIN_LIFT_ANGLE, MAX_LIFT_ANGLE)
-            Y = clamp(NEUTRAL_LIFT_ANGLE + correction, MIN_LIFT_ANGLE, MAX_LIFT_ANGLE)
-            
-            print(f"\nCycle {step_index//4 + 1}: Yaw={current_yaw:.1f}, Err={yaw_error:.1f} -> N={N:.1f}, Y={Y:.1f}")
+            print(f"\nCycle {step_index//4 + 1}: Yaw={current_yaw:.1f}, Err={yaw_error:.1f} -> Policy says N={N:.1f}, Y={Y:.1f}")
 
             # Step 1: Lift FR/BL
             step_pose = stance_pose[:]
@@ -235,12 +292,16 @@ def on_key_press(key):
         if hasattr(key, 'char'):
             char = key.char.lower()
             if char == 't':
-                # Toggle logic... (omitted for brevity, same as before)
-                pass
+                motor_control_enabled = not motor_control_enabled
+                body_controller.set_all_control_status(motor_control_enabled)
+                status_str = "ENABLED" if motor_control_enabled else "DISABLED"
+                print(f"\n--- Motor control {status_str} ---")
+            
             if not motor_control_enabled: return
             if char == 's':
                 if is_walking: is_walking = False
             if is_walking: return
+
             if char == 'a': set_manual_angles_action(get_stance_angles())
             elif char == 'd': set_manual_angles_action([0.0] * NUM_MOTORS)
             elif char == 'o':
@@ -250,10 +311,10 @@ def on_key_press(key):
                     print(f"\nNew Target Yaw set to current heading: {TARGET_YAW:.2f} deg.")
                 else:
                     TARGET_YAW = REAL_TARGET
-                    print(f"\nWarning: No yaw data. Target set to 45.0. Is DMP ready on ESP {ESP_WITH_IMU}?")
+                    print(f"\nWarning: No yaw data. Target set to {REAL_TARGET}. Is DMP ready on ESP {ESP_WITH_IMU}?")
                 is_walking = True
                 threading.Thread(target=execute_autocorrect_walk, daemon=True).start()
-            elif char == 'y':
+            elif char == 'y': # Kept 'y' key for consistency
                 TARGET_YAW = REAL_TARGET
                 print(f"\n[Manual] Target Yaw forced to {REAL_TARGET:.2f} deg. Starting walk.")
                 is_walking = True
@@ -262,12 +323,13 @@ def on_key_press(key):
         print(f"Error in on_key_press: {e}")
 
 if __name__ == "__main__":
-    if not initial_setup_successful:
+    if not initial_setup_successful or not walk_policy_model:
         sys.exit(1)
 
-    print("\n" + "="*50 + "\nQuadPilot Auto-Correcting Walk Control\n" + "="*50)
-    print(" W: Start walk | S: Stop walk | A: Stance | D: Zero | T: Toggle | Esc: Exit")
-    print("-" * 50 + f"\nYaw correction ON. Kp={CORRECTION_GAIN_KP}. IMU on ESP#{ESP_WITH_IMU}\n" + "="*50)
+    print("\n" + "="*50 + "\nQuadPilot Auto-Correcting Walk Control (NN Policy)\n" + "="*50)
+    print(" o: Start walk (sets current yaw as target) | y: Start walk (sets 0 as target)")
+    print(" s: Stop walk | a: Stance | d: Zero | t: Toggle Motors | Esc: Exit")
+    print("-" * 50 + f"\nYaw correction ON (Policy: {MODEL_PATH}). IMU on ESP#{ESP_WITH_IMU}\n" + "="*50)
     
     print("Setting initial stance pose...")
     set_manual_angles_action(get_stance_angles())
@@ -280,7 +342,7 @@ if __name__ == "__main__":
     finally:
         print("\nInitiating shutdown...")
         is_walking = False
-        time.sleep(0.5) # Give walk thread time to stop
+        time.sleep(0.5)
         if listener.is_alive(): listener.stop()
         if body_controller:
             print("Disabling motors and closing connection...")
