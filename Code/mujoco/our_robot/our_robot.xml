@@ -22,6 +22,7 @@
 			
 			<default class="paw">
 				<geom mass=".001" friction=".516 .141 .01"/>
+
 			</default>
 
 		</default>
@@ -38,6 +39,7 @@
 	</asset>
 
 	<worldbody>
+
 		<body name="trunk" childclass="our_robot" pos="0 0 .15">
 				<camera name="tracking" mode="trackcom" pos="0 -1 0.8" xyaxes="1 0 0 0 1 1"/>
 				<geom contype="0" conaffinity="0" mesh="chasis" mass="1.858"/>
@@ -108,7 +110,6 @@
 			<position class="knee" name="BL_knee_actuator" joint="BL_knee_joint"/>
 	</actuator>
 
-	<!--  -->
 	<keyframe>
 			<key name="home"
 			qpos="0 0 .20 0 0 0 0 2.35619 -1.5708 2.35619 -1.5708 2.35619 -1.5708 2.35619 -1.5708"

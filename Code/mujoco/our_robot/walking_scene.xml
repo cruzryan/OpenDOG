@@ -1,7 +1,7 @@
 <mujoco model="our_robot scene">
   <include file="our_robot.xml"/>
 
-  <statistic center="0 0 0.1" extent="0.8"/>
+  <statistic center="0 0 0.1" extent="2.0"/>
 
   <visual>
     <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
@@ -11,12 +11,16 @@
 
   <asset>
     <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
-    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
+    <texture type="2d" name="groundplane_texture" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
       markrgb="0.8 0.8 0.8" width="300" height="300"/>
-    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
+    <material name="groundplane_material" texture="groundplane_texture" texuniform="true" texrepeat="20 20" reflectance="0.1"/>
+
+    <!-- This should be line 16 or around there -->
+    <hfield name="terrain_hfield" nrow="100" ncol="100" size="5.0 5.0 0.3 0.001"/>
   </asset>
 
   <worldbody>
+
     <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>
     <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
   </worldbody>
