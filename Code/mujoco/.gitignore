@@ -2,4 +2,8 @@
 /models/*
 /logs/*
 /videos/walk/*
-/videos/jump/*
+/videos/jump/
+/sim2real/output_terrain_v4/*
+/mujoco/sim2real/output_terrain_v4/*
+/mujoco/output/*
+/output/*

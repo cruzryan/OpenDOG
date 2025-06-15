@@ -1,0 +1,67 @@
+import time
+import numpy as np
+import mujoco
+import mujoco.viewer
+import random
+random.seed()
+
+class RobotLegEnv:
+    def __init__(self):
+        # Load the model from the XML file (using the path you specified)
+        self.m = mujoco.MjModel.from_xml_path("../our_robot/our_robot.xml")
+        self.d = mujoco.MjData(self.m)
+        # Launch the passive viewer (same as the old code)
+        self.viewer = mujoco.viewer.launch_passive(self.m, self.d)
+        self.done = False
+        self.max_steps = 10000  # Run for a long time to allow visualization
+        self.current_step = 0
+
+    def reset(self):
+        # Reset the simulation to the initial state
+        mujoco.mj_resetData(self.m, self.d)
+        # Use the "home" keyframe from the XML
+        mujoco.mj_resetDataKeyframe(self.m, self.d, 0)  # 0 corresponds to the "home" keyframe
+        self.done = False
+        self.current_step = 0
+        return self.get_observation()
+
+    def get_observation(self):
+        # Return the current state (qpos and qvel for all joints)
+        return np.concatenate([self.d.qpos, self.d.qvel]).astype(np.float32)
+
+    def step(self):
+        # Advance the simulation by one step
+        mujoco.mj_step(self.m, self.d)
+        self.current_step += 1
+        
+        # Basic observation (not used for control, just for structure)
+        observation = self.get_observation()
+        
+        # No reward or termination logic since we're just visualizing
+        reward = 0
+        # self.done = self.current_step >= self.max_steps
+        self.done = False
+        
+        return observation, reward, self.done, {}
+
+    def render(self):
+        # Sync the viewer with the simulation state (same as the old code)
+        with self.viewer.lock():
+            pass
+        self.viewer.sync()
+
+    def close(self):
+        # Close the viewer (same as the old code)
+        self.viewer.close()
+
+# Create the environment and run the simulation loop
+env = RobotLegEnv()
+obs = env.reset()
+
+try:
+    while not env.done:
+        obs, reward, done, info = env.step()
+        env.render()
+        time.sleep(1/60)  # Add a small delay to match typical rendering rates
+except KeyboardInterrupt:
+    env.close()
