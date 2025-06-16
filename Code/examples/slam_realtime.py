@@ -200,6 +200,48 @@ def process_points_gpu(verts_gpu):
     )
 
 
+# --- NEW: Draw Thick Bounding Box ---
+def draw_thick_bounding_box(box, color, thickness=0.04):
+    # Get corners of the box
+    min_b = box.min
+    max_b = box.max
+    corners = [
+        Vector3(min_b.x, min_b.y, min_b.z),
+        Vector3(max_b.x, min_b.y, min_b.z),
+        Vector3(max_b.x, max_b.y, min_b.z),
+        Vector3(min_b.x, max_b.y, min_b.z),
+        Vector3(min_b.x, min_b.y, max_b.z),
+        Vector3(max_b.x, min_b.y, max_b.z),
+        Vector3(max_b.x, max_b.y, max_b.z),
+        Vector3(min_b.x, max_b.y, max_b.z),
+    ]
+    # Define edges as pairs of corner indices
+    edges = [
+        (0,1),(1,2),(2,3),(3,0), # bottom
+        (4,5),(5,6),(6,7),(7,4), # top
+        (0,4),(1,5),(2,6),(3,7)  # sides
+    ]
+    for start, end in edges:
+        p1 = corners[start]
+        p2 = corners[end]
+        # Compute center and length
+        center = Vector3(
+            (p1.x + p2.x)/2,
+            (p1.y + p2.y)/2,
+            (p1.z + p2.z)/2
+        )
+        dx = p2.x - p1.x
+        dy = p2.y - p1.y
+        dz = p2.z - p1.z
+        length = math.sqrt(dx*dx + dy*dy + dz*dz)
+        # Draw a thin box (cuboid) along the edge
+        if abs(dx) > 0:
+            draw_cube(center, length, thickness, thickness, color)
+        elif abs(dy) > 0:
+            draw_cube(center, thickness, length, thickness, color)
+        else:
+            draw_cube(center, thickness, thickness, length, color)
+
 # Main loop
 gpu_time = 0.0
 while not window_should_close():
@@ -248,7 +290,7 @@ while not window_should_close():
     for min_b, max_b, color in obstacle_boxes_and_colors_cpu:
         box = BoundingBox(Vector3(min_b[0], min_b[1], min_b[2]), Vector3(max_b[0], max_b[1], max_b[2]))
         r,g,b = color
-        draw_bounding_box(box, Color(r,g,b,255))
+        draw_thick_bounding_box(box, Color(255,0,0,255), thickness=0.02)
         
     end_mode_3d()
 

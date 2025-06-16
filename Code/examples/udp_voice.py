@@ -312,7 +312,7 @@ def process_voice_command(command_text: str):
         print("[ACTION] Lying down (all motors to 0).")
         command_set_angles(get_sit_angles())
 
-    elif "apagate" in command_text:
+    elif "apagado" in command_text or "apagar" in command_text or "apágate" in command_text or "apagate" in command_text:
         print("[ACTION] Disabling motor control.")
         is_walking = False
         motor_control_enabled = False
