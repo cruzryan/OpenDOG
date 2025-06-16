@@ -481,9 +481,9 @@ if __name__ == "__main__":
             print(f"Calibration complete. Yaw Offset: {shared_state.yaw_offset:.2f} degrees.")
     except Exception as e:
         print(f"FATAL ERROR during initialization: {e}")
-        if body_controller: body_controller.close();
-        if rs_components: rs_components[0].stop();
-        sys.exit(1)
+        #if body_controller: body_controller.close();
+        #if rs_components: rs_components[0].stop();
+        #sys.exit(1)
 
     print("\n" + "="*60 + "\n QuadPilot Master Voice Control System Activated\n" + "="*60)
     print(" Awaiting voice commands... ('Perrito ...')\n Press [Esc] key at any time to SHUT DOWN.\n" + "="*60 + "\n")
